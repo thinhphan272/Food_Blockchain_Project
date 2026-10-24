@@ -1,0 +1,44 @@
+# ====================================================================
+# Git Ignore chuẩn hóa cho Dự án SmartChain (Java, Node, C++, Docker)
+# ====================================================================
+
+# 1. Môi trường & Mật khẩu nhạy cảm
+.env
+.env.local
+*.pem
+*.key
+
+# 2. Phân hệ Backend Java (Maven / Spring Boot)
+backend/target/
+backend/.mvn/
+backend/*.log
+backend/.flattened-pom.xml
+
+# 3. Phân hệ Frontend (Node.js / React / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.pnpm-debug.log*
+
+# 4. Phân hệ IoT Embedded (PlatformIO / Wokwi)
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+firmware/*.bin
+firmware/*.elf
+
+# 5. Dữ liệu Docker Volumes & Dữ liệu CSDL cục bộ
+docker/data/
+*.rdb
+*.dump
+*.csv.tmp
+
+# 6. IDE & Công cụ chỉnh sửa (VSCode, IntelliJ, Eclipse, OS)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.iml
+.DS_Store
+Thumbs.db

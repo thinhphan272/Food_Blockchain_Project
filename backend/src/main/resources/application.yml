@@ -1,0 +1,58 @@
+server:
+  port: ${BACKEND_PORT:8080}
+
+spring:
+  application:
+    name: smartchain-traceability-backend
+
+  # 1. MySQL JPA Cấu hình
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:supermarket_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:superuser}
+    password: ${MYSQL_PASSWORD:superpassword}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # 2. MongoDB Cấu hình
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USER:mongoadmin}:${MONGO_PASSWORD:mongopassword}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:supermarket_mongo}?authSource=admin
+
+    # 3. Redis Cấu hình
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redispassword}
+      timeout: 2000ms
+
+    # 4. Cassandra Cấu hình
+    cassandra:
+      contact-points: ${CASSANDRA_HOST:localhost}
+      port: ${CASSANDRA_PORT:9042}
+      keyspace-name: ${CASSANDRA_KEYSPACE:supermarket_telemetry_ks}
+      local-datacenter: datacenter1
+      schema-action: create_if_not_exists
+
+    # 5. Neo4j Cấu hình
+    neo4j:
+      uri: bolt://${NEO4J_HOST:localhost}:${NEO4J_BOLT_PORT:7687}
+      authentication:
+        username: ${NEO4J_USER:neo4j}
+        password: ${NEO4J_PASSWORD:neo4jpassword}
+
+# Cấu hình MQTT Broker
+mqtt:
+  broker: tcp://${MQTT_HOST:localhost}:${MQTT_PORT:1883}
+  clientId: smartchain-backend-service
+  defaultTopic: smartchain/telemetry/#
+
+# Cấu hình JWT
+jwt:
+  secret: ${JWT_SECRET:SmartChainSecretKeyForSupermarketTraceability2026SuperSecureKey!}
+  expirationMs: ${JWT_EXPIRATION_MS:86400000}
