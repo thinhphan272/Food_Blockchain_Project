@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # 1. Message Broker MQTT: Eclipse Mosquitto
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: smartchain-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+
+  # 2. CSDL MySQL 8.0 (ACID & Storage Profiles)
+  mysql:
+    image: mysql:8.0
+    container_name: smartchain-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: supermarket_db
+      MYSQL_USER: superuser
+      MYSQL_PASSWORD: superpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # 3. CSDL MongoDB 6.0 (Batches & Blockchain Ledger)
+  mongodb:
+    image: mongo:6.0
+    container_name: smartchain-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongoadmin
+      MONGO_INITDB_ROOT_PASSWORD: mongopassword
+      MONGO_INITDB_DATABASE: supermarket_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  # 4. CSDL Redis 7.0 (Cache, Redlock, Leaderboard)
+  redis:
+    image: redis:7.0-alpine
+    container_name: smartchain-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redispassword --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # 5. CSDL Apache Cassandra 4.1 (Time-Series Telemetry Big Data)
+  cassandra:
+    image: cassandra:4.1
+    container_name: smartchain-cassandra
+    restart: unless-stopped
+    environment:
+      - CASSANDRA_CLUSTER_NAME=SupermarketColdChainCluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+
+  # 6. CSDL Neo4j 5.x (Graph Network & Fast Recall)
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: smartchain-neo4j
+    restart: unless-stopped
+    environment:
+      - NEO4J_AUTH=neo4j/neo4jpassword
+      - NEO4J_PLUGINS=["apoc"]
+    ports:
+      - "7474:7474" # Giao diện đồ thị trên Web Browser
+      - "7687:7687" # Giao thức Bolt cho Backend kết nối
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  mosquitto_data:
+  mysql_data:
+  mongodb_data:
+  redis_data:
+  cassandra_data:
+  neo4j_data:

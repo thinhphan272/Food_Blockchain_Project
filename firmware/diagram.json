@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "author": "Supermarket IoT Multi-Category Team",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht", "top": -120, "left": -100, "attrs": { "temperature": "9.5", "humidity": "90" } },
+    { "type": "wokwi-potentiometer", "id": "pot_gas", "top": -120, "left": 80, "attrs": { "label": "Bio-Gas (NH3/TMA/C2H4)" } },
+    { "type": "wokwi-potentiometer", "id": "pot_weight", "top": -120, "left": 220, "attrs": { "label": "Weight Loadcell" } },
+    { "type": "wokwi-slide-switch", "id": "sw_door", "top": 180, "left": -120, "attrs": { "label": "Door/Seal Switch" } },
+    { "type": "wokwi-ssd1306", "id": "oled", "top": 150, "left": 50, "attrs": {} },
+    { "type": "wokwi-led", "id": "led_red", "top": -50, "left": -180, "attrs": { "color": "red" } },
+    { "type": "wokwi-led", "id": "led_green", "top": -10, "left": -180, "attrs": { "color": "green" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": 60, "left": -180, "attrs": {} },
+    { "type": "wokwi-relay-module", "id": "relay", "top": -80, "left": 340, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:GND.1", "dht:GND", "black", [ "v0" ] ],
+    [ "esp:3V3", "dht:VCC", "red", [ "v0" ] ],
+    [ "esp:15", "dht:SDA", "orange", [ "v0" ] ],
+
+    [ "esp:GND.1", "pot_gas:GND", "black", [ "v0" ] ],
+    [ "esp:3V3", "pot_gas:VCC", "red", [ "v0" ] ],
+    [ "esp:34", "pot_gas:SIG", "purple", [ "v0" ] ],
+
+    [ "esp:GND.1", "pot_weight:GND", "black", [ "v0" ] ],
+    [ "esp:3V3", "pot_weight:VCC", "red", [ "v0" ] ],
+    [ "esp:35", "pot_weight:SIG", "blue", [ "v0" ] ],
+
+    [ "esp:GND.1", "sw_door:1", "black", [ "v0" ] ],
+    [ "esp:13", "sw_door:2", "yellow", [ "v0" ] ],
+
+    [ "esp:GND.2", "oled:GND", "black", [ "v0" ] ],
+    [ "esp:3V3", "oled:VCC", "red", [ "v0" ] ],
+    [ "esp:22", "oled:SCL", "cyan", [ "v0" ] ],
+    [ "esp:21", "oled:SDA", "cyan", [ "v0" ] ],
+
+    [ "esp:GND.1", "led_red:C", "black", [ "v0" ] ],
+    [ "esp:2", "led_red:A", "red", [ "v0" ] ],
+
+    [ "esp:GND.1", "led_green:C", "black", [ "v0" ] ],
+    [ "esp:4", "led_green:A", "green", [ "v0" ] ],
+
+    [ "esp:GND.1", "buzzer:1", "black", [ "v0" ] ],
+    [ "esp:12", "buzzer:2", "gray", [ "v0" ] ],
+
+    [ "esp:GND.2", "relay:GND", "black", [ "v0" ] ],
+    [ "esp:5V", "relay:VCC", "red", [ "v0" ] ],
+    [ "esp:14", "relay:IN", "magenta", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
