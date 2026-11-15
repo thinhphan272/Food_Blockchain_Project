@@ -2,8 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background-color: #f8fafc;
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+    color: #1A1A1A;
+    background-color: #F6F3F0;
+    letter-spacing: -0.012em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html.dark, html.dark body, .dark body {
+    color: #F5F5F5;
+    background-color: #120C08;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  input, select, textarea, button {
+    color: inherit;
+  }
+}
+
+/* Hide scrollbar for clean horizontal mobile docks */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Momentum Hatching & Heatmap Tokens */
+.heat-0 {
+  background-color: rgba(249, 87, 22, 0.04);
+}
+
+.heat-1 {
+  background-image: repeating-linear-gradient(45deg, #FF5B14 0, #FF5B14 2px, transparent 2px, transparent 6px);
+  background-color: rgba(249, 87, 22, 0.08);
+}
+
+.heat-2 {
+  background-color: #F95716;
+}
+
+.legend-hatched {
+  background-image: repeating-linear-gradient(45deg, #FF5B14 0, #FF5B14 2px, transparent 2px, transparent 6px);
+}
+
+.legend-half {
+  background-color: rgba(249, 87, 22, 0.45);
+}
+
+.legend-solid {
+  background-color: #F95716;
+}
+
+.legend-solidDark {
+  background-color: #B03A0A;
+}
+
+.legend-hatched, .legend-half, .legend-solid, .legend-solidDark {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Clean Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(249, 87, 22, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #F95716;
 }

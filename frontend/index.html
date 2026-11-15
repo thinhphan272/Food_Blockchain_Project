@@ -2,11 +2,29 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartChain - Hệ Thống Truy Xuất Nguồn Gốc Thực Phẩm Chuỗi Lạnh Siêu Thị</title>
+    <title>SmartChain Enterprise — Hệ Thống Truy Xuất Nguồn Gốc Thực Phẩm Đa Ngành Hàng (IoT + Blockchain + 5 NoSQL)</title>
+    <script>
+      window.global = window;
+      try {
+        // Mặc định kích hoạt chuẩn Giao diện Sáng (Light Mode Warm Cream)
+        const currentTheme = localStorage.getItem('smartchain_theme_v2');
+        if (currentTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+          if (!currentTheme) {
+            localStorage.setItem('smartchain_theme_v2', 'light');
+          }
+        }
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   </head>
-  <body class="bg-slate-50 text-slate-800">
+  <body class="bg-[#F6F3F0] text-[#1A1A1A] antialiased selection:bg-[#F95716] selection:text-white transition-colors duration-200">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
