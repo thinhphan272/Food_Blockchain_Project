@@ -1076,11 +1076,14 @@ function MainDashboardLayout() {
         categoryCode: selectedBatch.category_code || selectedBatch.category,
         vehiclePlate: plate,
       });
+      const isTransit = selectedBatch?.status === 'IN_TRANSIT';
       setSystemAlert({
-        type: 'success',
-        message: `OTA SYNC THÀNH CÔNG: Đã nạp Profile ${res.categoryCode || selectedBatch.category_code} của lô ${selectedBatch.batch_code} xuống ESP32 xe lạnh ${plate}!`,
+        type: isTransit ? 'success' : 'warning',
+        message: isTransit
+          ? `OTA SYNC THÀNH CÔNG: Đã nạp Profile ${res.categoryCode || selectedBatch.category_code} của lô ${selectedBatch.batch_code} xuống ESP32 xe lạnh ${plate}!`
+          : `ĐÃ NẠP CẤU HÌNH OTA XUỐNG ESP32 XE ${plate}: Thông số bảo quản lô ${selectedBatch.batch_code} đã nạp thành công vào phần cứng vi điều khiển (Wokwi OLED). Lưu ý: Lô hàng hiện ở trạng thái [${selectedBatch.status || 'CHỜ VẬN CHUYỂN'}], xe chưa khởi hành nên dữ liệu GPS và cảm biến thời gian thực trên bản đồ Dashboard sẽ bắt đầu phát trực tiếp khi tài xế bấm 'Bắt đầu hành trình'!`,
       });
-      setTimeout(() => setSystemAlert(null), 6000);
+      setTimeout(() => setSystemAlert(null), 8000);
     } catch (err) {
       setSystemAlert({
         type: 'danger',
