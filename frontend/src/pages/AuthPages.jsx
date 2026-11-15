@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   SmartChainCube,
@@ -13,6 +13,8 @@ import {
   ChevronLeft,
   ArrowUpRight,
   UserCheck,
+  Box,
+  X,
 } from '../components/MomentumIcons';
 
 // Vector SVG chuẩn chính thức của Google (4 màu)
@@ -59,6 +61,11 @@ export default function AuthPages({
 
   // Xác định cổng hiện tại
   const currentPortal = isPathAdmin ? 'admin' : isPathEnterprise ? 'enterprise' : isPathConsumer ? 'consumer' : 'gateway';
+
+  // State hỗ trợ Đăng nhập Google Gmail trực tiếp
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleEmailInput, setGoogleEmailInput] = useState('thinhphan272@gmail.com');
+  const [googleNameInput, setGoogleNameInput] = useState('Phan Sĩ Thịnh');
 
   // Dữ liệu nội dung theo từng cổng chuyên biệt
   const heroContent = {
@@ -287,20 +294,102 @@ export default function AuthPages({
               {currentPortal === 'enterprise' && (
                 <form onSubmit={(e) => { e.preventDefault(); handleLoginSubmit(e); }} className="space-y-4">
                   <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-white/70 block mb-1.5">
-                      Vai Trò Công Tác *
-                    </label>
-                    <select
-                      value={enterpriseLoginRole}
-                      onChange={(e) => setEnterpriseLoginRole(e.target.value)}
-                      className="w-full rounded-2xl border border-white/20 bg-white/[0.10] backdrop-blur-md px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#F95716] transition-all"
-                    >
-                      <option value="LOGISTICS_DRIVER" className="bg-[#1C140F] text-white">Tài Xế Xe Lạnh (LOGISTICS_DRIVER)</option>
-                      <option value="PRODUCER" className="bg-[#1C140F] text-white">Nông Trại Sản Xuất (PRODUCER)</option>
-                      <option value="QC_INSPECTOR" className="bg-[#1C140F] text-white">KCS Kiểm Định (QC_INSPECTOR)</option>
-                      <option value="SHELF_OPERATOR" className="bg-[#1C140F] text-white">Quản Lý Kệ FEFO (SHELF_OPERATOR)</option>
-                      <option value="CASHIER" className="bg-[#1C140F] text-white">Thu Ngân Quầy POS (CASHIER)</option>
-                    </select>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-white/80">
+                        Chọn Vai Trò Doanh Nghiệp (6 Vai Trò):
+                      </label>
+                      <span className="text-[11px] text-[#F95716] font-mono font-bold">
+                        {enterpriseLoginRole}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        {
+                          id: 'LOGISTICS_DRIVER',
+                          title: 'Tài Xế Xe Lạnh',
+                          code: 'driver_01',
+                          icon: Truck,
+                          desc: 'Vận chuyển & vi khí hậu',
+                        },
+                        {
+                          id: 'PRODUCER',
+                          title: 'Nông Trại Sản Xuất',
+                          code: 'farm_dalat',
+                          icon: Layers,
+                          desc: 'Khai báo & Genesis #0',
+                        },
+                        {
+                          id: 'INBOUND_GATE',
+                          title: 'Thủ Kho Tiếp Nhận',
+                          code: 'inbound_01',
+                          icon: Box,
+                          desc: 'Tiếp nhận xe tại cổng kho',
+                        },
+                        {
+                          id: 'QC_INSPECTOR',
+                          title: 'KCS Kiểm Định TTI',
+                          code: 'qc_gate',
+                          icon: ShieldCheck,
+                          desc: 'Đối soát Arrhenius & ký số',
+                        },
+                        {
+                          id: 'SHELF_OPERATOR',
+                          title: 'Quản Lý Kệ FEFO',
+                          code: 'shelf_staff',
+                          icon: CheckSquare,
+                          desc: 'Sắp xếp quầy theo hạn dùng',
+                        },
+                        {
+                          id: 'CASHIER',
+                          title: 'Thu Ngân Quầy POS',
+                          code: 'pos_01',
+                          icon: ShoppingCart,
+                          desc: 'Bán lẻ & hủy tem niêm phong',
+                        },
+                      ].map((role) => {
+                        const IconComponent = role.icon;
+                        const isSelected = enterpriseLoginRole === role.id;
+                        return (
+                          <button
+                            type="button"
+                            key={role.id}
+                            onClick={() => {
+                              setEnterpriseLoginRole(role.id);
+                              setAuthUsername(role.code);
+                              setAuthPassword('123');
+                              setAuthError('');
+                            }}
+                            className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                              isSelected
+                                ? 'border-[#F95716] bg-[#F95716]/25 shadow-[0_0_15px_rgba(249,87,22,0.35)] ring-1 ring-[#F95716]'
+                                : 'border-white/10 bg-white/[0.05] hover:border-white/30 hover:bg-white/[0.08]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span
+                                className={`flex h-7 w-7 items-center justify-center rounded-xl ${
+                                  isSelected ? 'bg-[#F95716] text-white' : 'bg-white/10 text-white/70'
+                                }`}
+                              >
+                                <IconComponent size={14} />
+                              </span>
+                              <span className="text-[9.5px] font-mono text-white/50">
+                                {role.code}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-white leading-tight">
+                                {role.title}
+                              </div>
+                              <div className="text-[10px] text-white/60 leading-tight mt-0.5">
+                                {role.desc}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div>
@@ -312,7 +401,7 @@ export default function AuthPages({
                       required
                       value={authUsername}
                       onChange={(e) => setAuthUsername(e.target.value)}
-                      placeholder="driver, producer, qc, shelf, cashier..."
+                      placeholder="driver_01, farm_dalat, inbound_01, qc_gate, shelf_staff, pos_01..."
                       className="w-full rounded-2xl border border-white/20 bg-white/[0.10] backdrop-blur-md px-4 py-3 text-sm font-medium text-white placeholder:text-white/40 focus:outline-none focus:border-[#F95716] focus:bg-white/[0.15] transition-all"
                     />
                   </div>
@@ -336,16 +425,18 @@ export default function AuthPages({
                     disabled={authLoading}
                     className="w-full rounded-2xl bg-[#F95716] hover:bg-[#E0430B] py-3.5 text-sm font-extrabold text-white shadow-[0_8px_25px_rgba(249,87,22,0.40)] hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-wider mt-2 cursor-pointer"
                   >
-                    {authLoading ? 'Đang xác thực...' : 'Đăng Nhập Cán Bộ'}
+                    {authLoading ? 'Đang xác thực...' : 'Đăng Nhập Cán Bộ Doanh Nghiệp'}
                   </button>
 
                   <div className="text-center pt-1 space-y-1">
-                    <span className="text-[11px] text-white/50 block">Bấm để điền mẫu vai trò (Mật khẩu: 123):</span>
+                    <span className="text-[11px] text-white/50 block">Mật khẩu mặc định toàn hệ thống là: <strong className="text-white">123</strong></span>
                     <div className="flex flex-wrap items-center justify-center gap-1.5">
-                      <button type="button" onClick={() => { setEnterpriseLoginRole('LOGISTICS_DRIVER'); setAuthUsername('driver'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">driver</button>
-                      <button type="button" onClick={() => { setEnterpriseLoginRole('PRODUCER'); setAuthUsername('producer'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">producer</button>
-                      <button type="button" onClick={() => { setEnterpriseLoginRole('QC_INSPECTOR'); setAuthUsername('qc'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">qc</button>
-                      <button type="button" onClick={() => { setEnterpriseLoginRole('CASHIER'); setAuthUsername('cashier'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">cashier</button>
+                      <button type="button" onClick={() => { setEnterpriseLoginRole('LOGISTICS_DRIVER'); setAuthUsername('driver_01'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">driver_01</button>
+                      <button type="button" onClick={() => { setEnterpriseLoginRole('PRODUCER'); setAuthUsername('farm_dalat'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">farm_dalat</button>
+                      <button type="button" onClick={() => { setEnterpriseLoginRole('INBOUND_GATE'); setAuthUsername('inbound_01'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">inbound_01</button>
+                      <button type="button" onClick={() => { setEnterpriseLoginRole('QC_INSPECTOR'); setAuthUsername('qc_gate'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">qc_gate</button>
+                      <button type="button" onClick={() => { setEnterpriseLoginRole('SHELF_OPERATOR'); setAuthUsername('shelf_staff'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">shelf_staff</button>
+                      <button type="button" onClick={() => { setEnterpriseLoginRole('CASHIER'); setAuthUsername('pos_01'); setAuthPassword('123'); setAuthError(''); }} className="bg-white/10 hover:bg-[#F95716] cursor-pointer transition-colors px-2 py-0.5 rounded text-white font-mono text-[10.5px]">pos_01</button>
                     </div>
                   </div>
                 </form>
@@ -429,7 +520,7 @@ export default function AuthPages({
 
                       <button
                         type="button"
-                        onClick={handleGoogleSignIn}
+                        onClick={() => setShowGoogleModal(true)}
                         disabled={authLoading}
                         className="w-full flex items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/[0.12] hover:bg-white/[0.22] backdrop-blur-xl py-3 px-4 text-xs font-bold text-white shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
                       >
@@ -580,6 +671,126 @@ export default function AuthPages({
             <span className="hover:text-white cursor-pointer transition-colors">Hỗ Trợ Kỹ Thuật</span>
           </div>
         </footer>
+        {/* MODAL XÁC THỰC GOOGLE GMAIL CHÍNH CHỦ */}
+        {showGoogleModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in text-neutral-800">
+            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-[#1C140F] border border-orange-950/10 dark:border-orange-500/20 p-6 shadow-2xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10">
+                    <GoogleGIcon size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                      Đăng Nhập Khách Hàng Bằng Google Gmail
+                    </h3>
+                    <p className="text-[11px] text-neutral-400">
+                      Tự động cấp chứng chỉ JWT cho tài khoản người tiêu dùng
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleModal(false)}
+                  className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Danh sách tài khoản gợi ý 1 chạm */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 block">
+                  Chọn Tài Khoản Gmail Có Sẵn (1 Chạm):
+                </label>
+                <div className="space-y-2">
+                  {[
+                    {
+                      email: 'thinhphan272@gmail.com',
+                      name: 'Phan Sĩ Thịnh',
+                      roleNote: 'Khách hàng thành viên thân thiết',
+                    },
+                    {
+                      email: 'consumer.vietgap@gmail.com',
+                      name: 'Khách Hàng SmartChain',
+                      roleNote: 'Người tiêu dùng kiểm tra mã QR',
+                    },
+                  ].map((acc) => (
+                    <button
+                      type="button"
+                      key={acc.email}
+                      onClick={async () => {
+                        setShowGoogleModal(false);
+                        await handleGoogleSignIn({ email: acc.email, name: acc.name });
+                      }}
+                      className="w-full p-3 rounded-2xl border border-neutral-200 dark:border-white/10 hover:border-[#F95716] bg-neutral-50 dark:bg-white/[0.03] hover:bg-[#F95716]/[0.05] text-left transition-all cursor-pointer flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-[#F95716] text-white flex items-center justify-center font-bold text-xs">
+                          {acc.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] group-hover:text-[#F95716] transition-colors">
+                            {acc.name}
+                          </div>
+                          <div className="text-[11px] font-mono text-neutral-400">
+                            {acc.email}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold">
+                        Đăng nhập ngay &rarr;
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hoặc nhập email tùy chọn */}
+              <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 space-y-3">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 block">
+                  Hoặc Nhập Gmail Tùy Ý Khác:
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    value={googleEmailInput}
+                    onChange={(e) => setGoogleEmailInput(e.target.value)}
+                    placeholder="vidu@gmail.com"
+                    className="w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/[0.03] p-2.5 text-xs text-[#1A1A1A] dark:text-white focus:outline-none focus:border-[#F95716]"
+                  />
+                  <input
+                    type="text"
+                    value={googleNameInput}
+                    onChange={(e) => setGoogleNameInput(e.target.value)}
+                    placeholder="Họ và tên của bạn"
+                    className="w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/[0.03] p-2.5 text-xs text-[#1A1A1A] dark:text-white focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-neutral-600 cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!googleEmailInput.trim()}
+                    onClick={async () => {
+                      setShowGoogleModal(false);
+                      await handleGoogleSignIn({ email: googleEmailInput, name: googleNameInput });
+                    }}
+                    className="px-5 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 cursor-pointer disabled:opacity-40"
+                  >
+                    Xác Nhận & Đăng Nhập
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -42,7 +43,19 @@ public class AuthController {
         String username = payload.getOrDefault("username", "").trim();
         String password = payload.getOrDefault("password", "").trim();
 
-        Optional<User> userOpt = userRepository.findByUsername(username);
+        // Hỗ trợ bí danh thân thiện (aliases) cho người dùng khi kiểm thử nhanh
+        String lookupUser = username;
+        if ("driver".equalsIgnoreCase(username)) lookupUser = "driver_01";
+        else if ("producer".equalsIgnoreCase(username)) lookupUser = "farm_dalat";
+        else if ("qc".equalsIgnoreCase(username) || "qc_inspector".equalsIgnoreCase(username)) lookupUser = "qc_gate";
+        else if ("inbound".equalsIgnoreCase(username) || "warehouse".equalsIgnoreCase(username) || "thukho".equalsIgnoreCase(username)) lookupUser = "inbound_01";
+        else if ("shelf".equalsIgnoreCase(username) || "shelf_operator".equalsIgnoreCase(username)) lookupUser = "shelf_staff";
+        else if ("cashier".equalsIgnoreCase(username) || "pos".equalsIgnoreCase(username)) lookupUser = "pos_01";
+
+        Optional<User> userOpt = userRepository.findByUsername(lookupUser);
+        if (userOpt.isEmpty()) {
+            userOpt = userRepository.findByUsername(username);
+        }
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(401).body(Map.of(
                     "status", "ERROR",
@@ -86,6 +99,57 @@ public class AuthController {
         response.put("notes", user.getNotes() != null ? user.getNotes() : "");
         response.put("role", roleName);
         response.put("roleDescription", user.getRole() != null ? user.getRole().getDescription() : "");
+        response.put("createdAt", user.getCreatedAt());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<?> googleSignIn(@RequestBody Map<String, String> payload) {
+        String email = payload.getOrDefault("email", "").trim().toLowerCase();
+        String name = payload.getOrDefault("name", "").trim();
+        if (email.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "ERROR",
+                    "error", "EMAIL_REQUIRED",
+                    "message", "Địa chỉ Gmail không được để trống!"
+            ));
+        }
+
+        String username = email.split("@")[0].replaceAll("[^a-z0-9_]", "_");
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        User user;
+        if (userOpt.isPresent()) {
+            user = userOpt.get();
+        } else {
+            Role consumerRole = roleRepository.findByRoleName("CONSUMER")
+                    .orElseGet(() -> roleRepository.save(new Role("CONSUMER", "Khách hàng Tiêu dùng Quét mã QR")));
+            user = new User(
+                    username,
+                    passwordEncoder.encode("google_oauth_" + UUID.randomUUID()),
+                    name.isEmpty() ? ("Google User (" + username + ")") : name,
+                    "Public Consumer",
+                    consumerRole
+            );
+            user.setPhone(payload.getOrDefault("phone", "0988-GMAIL-USER"));
+            user.setIsActive(true);
+            user.setNotes("Tài khoản xác thực chính chủ qua Google Gmail: " + email);
+            user = userRepository.save(user);
+        }
+
+        String roleName = user.getRole() != null ? user.getRole().getRoleName() : "CONSUMER";
+        String token = jwtService.generateToken(user.getUsername(), roleName, user.getFullName());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("token", token);
+        response.put("userId", user.getUserId());
+        response.put("username", user.getUsername());
+        response.put("fullName", user.getFullName());
+        response.put("department", user.getDepartment());
+        response.put("email", email);
+        response.put("role", roleName);
+        response.put("roleDescription", user.getRole() != null ? user.getRole().getDescription() : "");
+        response.put("authProvider", "GOOGLE_GMAIL");
         response.put("createdAt", user.getCreatedAt());
         return ResponseEntity.ok(response);
     }
