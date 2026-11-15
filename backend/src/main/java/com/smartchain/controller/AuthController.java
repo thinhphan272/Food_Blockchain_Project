@@ -114,6 +114,13 @@ public class AuthController {
             boolean isAdminCaller = auth != null && auth.getAuthorities().stream()
                     .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
             if (!isAdminCaller) {
+                if ("ADMIN".equalsIgnoreCase(roleName)) {
+                    return ResponseEntity.status(403).body(Map.of(
+                            "status", "ERROR",
+                            "error", "ADMIN_SELF_REGISTRATION_FORBIDDEN",
+                            "message", "Nghiêm cấm tự đăng ký tài khoản Quản trị viên (ADMIN)!"
+                    ));
+                }
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "ERROR",
                         "error", "ENTERPRISE_ROLE_RESTRICTED",
