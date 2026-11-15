@@ -20,6 +20,9 @@ import {
 import { posCheckoutWithRedlock, getBatchScanHistory } from '../services/api';
 
 export default function BatchesPage({
+  batches = [],
+  onSelectBatch,
+  currentUser,
   handleCreateBatch,
   handleUpdateBatch,
   newBatchCategory,
@@ -72,6 +75,43 @@ export default function BatchesPage({
   const [editPackageUnit, setEditPackageUnit] = useState('Thùng carton tiêu chuẩn');
   const [editVehicle, setEditVehicle] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const isProducer = currentUser?.role === 'PRODUCER';
+  const isAdmin = currentUser?.role === 'ADMIN';
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [batchFilterStatus, setBatchFilterStatus] = useState('ALL');
+  const [batchSearchTerm, setBatchSearchTerm] = useState('');
+
+  // Tự động chọn lô đầu tiên nếu chưa chọn lô nào
+  useEffect(() => {
+    if (!selectedBatch && batches && batches.length > 0 && onSelectBatch) {
+      onSelectBatch(batches[0]);
+    }
+  }, [batches, selectedBatch, onSelectBatch]);
+
+  // Bộ lọc danh sách lô hàng hiển thị
+  const displayBatches = useMemo(() => {
+    if (!Array.isArray(batches)) return [];
+    return batches.filter((b) => {
+      const q = batchSearchTerm.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (b.batch_code && b.batch_code.toLowerCase().includes(q)) ||
+        (b.product_name && b.product_name.toLowerCase().includes(q)) ||
+        (b.farm_name && b.farm_name.toLowerCase().includes(q));
+
+      const st = String(b.status || '').toUpperCase();
+      let matchStatus = true;
+      if (batchFilterStatus === 'CREATED') matchStatus = st === 'CREATED' || st === 'ASSIGNED_PENDING';
+      else if (batchFilterStatus === 'IN_TRANSIT') matchStatus = st === 'READY_FOR_PICKUP' || st === 'IN_TRANSIT';
+      else if (batchFilterStatus === 'DELIVERED') matchStatus = st === 'DELIVERED' || st === 'QC_ACCEPTED';
+      else if (batchFilterStatus === 'ON_SHELF') matchStatus = st === 'ON_SHELF';
+      else if (batchFilterStatus === 'RECALLED') matchStatus = st.includes('RECALL');
+
+      return matchSearch && matchStatus;
+    });
+  }, [batches, batchSearchTerm, batchFilterStatus]);
 
   // Đồng bộ dữ liệu lô đang chọn vào khung thông tin & chỉnh sửa phía trên
   useEffect(() => {
@@ -211,10 +251,142 @@ export default function BatchesPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-black text-[#1A1A1A] dark:text-[#F5F5F5]">
-          Quản lý lô hàng, Tem QR kép & Cấu hình OTA
-        </h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black text-[#1A1A1A] dark:text-[#F5F5F5]">
+            {isProducer ? 'Quản lý Lô Hàng Nông Trại & Tem QR Kép' : 'Quản lý Lô Hàng, Tem QR Kép & Cấu hình OTA'}
+          </h2>
+          <p className="text-xs text-neutral-400 mt-1">
+            {isProducer
+              ? `Cơ sở sản xuất: ${currentUser?.assignedEntity || currentUser?.fullName || 'Nông Trại Công Nghệ Cao LangBiang'} • Khai báo nguồn gốc, in tem QR và theo dõi hành trình giao nhận`
+              : 'Khai báo nguồn gốc lô hàng, sinh tem QR kép và nạp cấu hình vi khí hậu OTA xuống xe tải lạnh'}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (isProducer && !newBatchFarm && currentUser?.assignedEntity) {
+              setNewBatchFarm(currentUser.assignedEntity);
+            }
+            setShowCreateModal(true);
+          }}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 transition-all cursor-pointer self-start sm:self-auto"
+        >
+          <Plus size={16} />
+          + Khai Báo Lô Hàng Mới
+        </button>
+      </div>
+
+      {/* KHUNG DANH SÁCH LÔ HÀNG CỦA NÔNG TRẠI / HỆ THỐNG */}
+      <div className={`${CARD} space-y-4`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-orange-950/5 dark:border-orange-500/10">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#F95716]/10 text-[#F95716]">
+              <Layers size={18} />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                {isProducer ? 'Danh sách Lô hàng của Nông trại' : 'Danh mục Lô hàng Chuỗi cung ứng'}
+              </h3>
+              <p className="text-[11px] text-neutral-400">
+                {isProducer ? 'Chọn một lô hàng để theo dõi tiến trình và quản lý ma trận mã QR' : 'Chọn lô hàng để xem thông tin chi tiết và điều phối vận chuyển'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={batchSearchTerm}
+              onChange={(e) => setBatchSearchTerm(e.target.value)}
+              placeholder="Tìm theo mã lô, tên sản phẩm..."
+              className="rounded-full border border-orange-950/10 bg-orange-950/[0.02] dark:border-orange-500/10 dark:bg-white/[0.02] px-3.5 py-1.5 text-xs focus:outline-none focus:border-[#F95716]"
+            />
+          </div>
+        </div>
+
+        {/* Tab lọc trạng thái */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
+          {[
+            { id: 'ALL', label: `Tất cả (${batches.length})` },
+            { id: 'CREATED', label: 'Chờ phân xe' },
+            { id: 'IN_TRANSIT', label: 'Đang vận chuyển' },
+            { id: 'DELIVERED', label: 'Đã đến kho / KCS' },
+            { id: 'ON_SHELF', label: 'Đang bày bán' },
+          ].map((tab) => (
+            <button
+              type="button"
+              key={tab.id}
+              onClick={() => setBatchFilterStatus(tab.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                batchFilterStatus === tab.id
+                  ? 'bg-[#F95716] text-white shadow-sm'
+                  : 'bg-orange-950/[0.03] dark:bg-white/[0.03] text-neutral-500 hover:text-[#1A1A1A] dark:hover:text-white'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Danh sách thẻ lô hàng */}
+        {displayBatches.length === 0 ? (
+          <div className="text-center py-8 text-neutral-400 text-xs">
+            Không tìm thấy lô hàng nào phù hợp với bộ lọc hiện tại.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {displayBatches.map((b) => {
+              const isSelected = selectedBatch?.batch_code === b.batch_code;
+              const status = String(b.status || 'CREATED').toUpperCase();
+              let badgeColor = 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-400';
+              let statusText = 'Mới tạo';
+              if (status === 'CREATED') { statusText = 'Mới khai báo'; badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400'; }
+              else if (status === 'ASSIGNED_PENDING') { statusText = 'Chờ tài xế nhận'; badgeColor = 'bg-amber-500/10 text-amber-600'; }
+              else if (status === 'READY_FOR_PICKUP') { statusText = 'Chờ bốc hàng'; badgeColor = 'bg-amber-500/10 text-amber-600'; }
+              else if (status === 'IN_TRANSIT') { statusText = 'Đang trên xe lạnh'; badgeColor = 'bg-purple-500/10 text-purple-600'; }
+              else if (status === 'DELIVERED') { statusText = 'Đã cập bến kho'; badgeColor = 'bg-indigo-500/10 text-indigo-600'; }
+              else if (status === 'QC_ACCEPTED') { statusText = 'KCS đã duyệt đạt'; badgeColor = 'bg-emerald-500/10 text-emerald-600'; }
+              else if (status === 'QC_REJECTED') { statusText = 'KCS từ chối'; badgeColor = 'bg-red-500/10 text-red-600'; }
+              else if (status === 'ON_SHELF') { statusText = 'Đang bày bán'; badgeColor = 'bg-emerald-600 text-white'; }
+              else if (status.includes('RECALL')) { statusText = 'Thu hồi khẩn cấp'; badgeColor = 'bg-red-600 text-white'; }
+
+              return (
+                <div
+                  key={b.batch_code}
+                  onClick={() => onSelectBatch && onSelectBatch(b)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-[#F95716] bg-[#F95716]/[0.05] shadow-sm'
+                      : 'border-orange-950/5 dark:border-orange-500/10 hover:border-[#F95716]/40 bg-orange-950/[0.01]'
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-mono text-xs font-black text-[#F95716]">
+                        {b.batch_code}
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${badgeColor}`}>
+                        {statusText}
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] line-clamp-1">
+                      {b.product_name || b.productName || 'Sản phẩm chưa đặt tên'}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 line-clamp-1">
+                      {b.farm_name || b.farmName || 'Nông trại LangBiang'}
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-orange-950/5 dark:border-orange-500/10 flex items-center justify-between text-[11px] text-neutral-500">
+                    <span>{b.package_count || 50} {b.package_unit || 'thùng'} &bull; {b.total_weight_kg || b.weight_kg || 500} kg</span>
+                    {isSelected && <span className="font-bold text-[#F95716]">✓ Đang chọn</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* PHẦN TRÊN: THÔNG TIN & CHỈNH SỬA LÔ HÀNG ĐANG CHỌN + QR KÉP & OTA */}
@@ -527,39 +699,115 @@ export default function BatchesPage({
             )}
           </div>
 
-          {/* Đồng bộ cấu hình vi khí hậu OTA */}
-          <div className={`${CARD} space-y-4`}>
-            <div className="flex items-center gap-2">
-              <Cpu size={18} className="text-[#F95716]" />
-              <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
-                Đồng bộ cấu hình vi khí hậu OTA
-              </h3>
-            </div>
+          {/* Đồng bộ cấu hình vi khí hậu OTA (Chỉ Quản trị viên/Điều phối thấy, ẩn với Producer) */}
+          {!isProducer && (
+            <div className={`${CARD} space-y-4`}>
+              <div className="flex items-center gap-2">
+                <Cpu size={18} className="text-[#F95716]" />
+                <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                  Đồng bộ cấu hình vi khí hậu OTA
+                </h3>
+              </div>
 
-            <div className="text-xs text-neutral-500 flex items-center justify-between">
-              <span>Phương tiện nhận cấu hình:</span>
-              <strong className="font-mono text-[#F95716]">
+              <div className="text-xs text-neutral-500 flex items-center justify-between">
+                <span>Phương tiện nhận cấu hình:</span>
+                <strong className="font-mono text-[#F95716]">
+                  {!selectedBatch
+                    ? 'Chưa chọn lô hàng'
+                    : selectedBatchPlate && !selectedBatchPlate.toUpperCase().includes('CHƯA')
+                    ? selectedBatchPlate
+                    : 'Chưa phân công xe'}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                disabled={!selectedBatch}
+                onClick={handleOtaSync}
+                className="w-full rounded-2xl border border-[#F95716]/30 bg-[#F95716]/10 p-3 text-xs font-extrabold text-[#F95716] hover:bg-[#F95716] hover:text-white transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              >
                 {!selectedBatch
-                  ? 'Chưa chọn lô hàng'
+                  ? 'CHƯA CHỌN LÔ HÀNG ĐỂ ĐỒNG BỘ OTA'
                   : selectedBatchPlate && !selectedBatchPlate.toUpperCase().includes('CHƯA')
-                  ? selectedBatchPlate
-                  : 'Chưa phân công xe'}
-              </strong>
+                  ? `ĐỒNG BỘ OTA XUỐNG ESP32 XE ${selectedBatchPlate}`
+                  : `ĐỒNG BỘ OTA LÔ ${selectedBatch.batch_code} XUỐNG ESP32`}
+              </button>
             </div>
+          )}
 
-            <button
-              type="button"
-              disabled={!selectedBatch}
-              onClick={handleOtaSync}
-              className="w-full rounded-2xl border border-[#F95716]/30 bg-[#F95716]/10 p-3 text-xs font-extrabold text-[#F95716] hover:bg-[#F95716] hover:text-white transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-            >
-              {!selectedBatch
-                ? 'CHƯA CHỌN LÔ HÀNG ĐỂ ĐỒNG BỘ OTA'
-                : selectedBatchPlate && !selectedBatchPlate.toUpperCase().includes('CHƯA')
-                ? `ĐỒNG BỘ OTA XUỐNG ESP32 XE ${selectedBatchPlate}`
-                : `ĐỒNG BỘ OTA LÔ ${selectedBatch.batch_code} XUỐNG ESP32`}
-            </button>
-          </div>
+          {/* Tiến độ vòng đời chuỗi cung ứng thực tế (Dành riêng cho Producer theo dõi tình trạng lô) */}
+          {isProducer && selectedBatch && (
+            <div className={`${CARD} space-y-4`}>
+              <div className="flex items-center gap-2">
+                <Clock size={18} className="text-[#F95716]" />
+                <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                  Tiến độ chuỗi cung ứng thực tế
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                  <span className="text-sm font-black">1.</span>
+                  <div>
+                    <div className="text-xs font-bold">Khai báo nguồn gốc & Genesis #0</div>
+                    <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400">Đã hoàn thành niêm phong điện tử</div>
+                  </div>
+                </div>
+
+                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${
+                  ['IN_TRANSIT', 'DELIVERED', 'QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
+                    ? 'bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-400'
+                    : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
+                }`}>
+                  <span className="text-sm font-black">2.</span>
+                  <div>
+                    <div className="text-xs font-bold">Vận chuyển xe tải lạnh IoT</div>
+                    <div className="text-[10.5px]">
+                      {['IN_TRANSIT', 'DELIVERED', 'QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
+                        ? `Xe ${selectedBatchPlate || '49C-567.89'} - Giám sát DHT22 liên tục`
+                        : 'Chờ tài xế xe lạnh tiếp nhận xuất bến'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${
+                  ['QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                    : selectedBatch?.status === 'QC_REJECTED'
+                    ? 'bg-red-500/10 border-red-500/20 text-red-600'
+                    : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
+                }`}>
+                  <span className="text-sm font-black">3.</span>
+                  <div>
+                    <div className="text-xs font-bold">Kiểm định chất lượng KCS & TTI</div>
+                    <div className="text-[10.5px]">
+                      {selectedBatch?.status === 'QC_ACCEPTED'
+                        ? 'Đã kiểm định TTI Arrhenius đạt chuẩn nhập kho'
+                        : selectedBatch?.status === 'QC_REJECTED'
+                        ? 'Không đạt chuẩn - Trả hàng về nông trại'
+                        : 'Chờ xe cập bến cổng tiếp nhận kho'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${
+                  selectedBatch?.status === 'ON_SHELF'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
+                }`}>
+                  <span className="text-sm font-black">4.</span>
+                  <div>
+                    <div className="text-xs font-bold">Bày bán trên quầy kệ siêu thị</div>
+                    <div className="text-[10.5px]">
+                      {selectedBatch?.status === 'ON_SHELF'
+                        ? 'Đang mở bán công khai - Người tiêu dùng quét QR'
+                        : 'Chờ xếp vào kệ mát FEFO'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -918,6 +1166,132 @@ export default function BatchesPage({
           </div>
         </div>
       )}
+
+      {/* MODAL KHAI BÁO LÔ NÔNG SẢN MỚI */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white dark:bg-[#1C140F] border border-orange-950/10 dark:border-orange-500/20 p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-orange-950/5 dark:border-orange-500/10">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <Plus size={18} />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                    Khai Báo Lô Nông Sản Mới & Đúc Khối Genesis #0
+                  </h3>
+                  <p className="text-[11px] text-neutral-400">
+                    Đăng ký lô hàng mới lên sổ cái Blockchain và niêm phong nguồn gốc điện tử
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/5 text-neutral-400 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                await handleCreateBatch(e);
+                setShowCreateModal(false);
+              }}
+              className="space-y-4"
+            >
+              {/* Chọn nhóm ngành hàng */}
+              <div>
+                <label className="text-xs font-bold text-neutral-500 block mb-2">
+                  CHỌN NHÓM NGÀNH HÀNG THỰC PHẨM
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {foodCategories.map((cat) => (
+                    <button
+                      type="button"
+                      key={cat.code}
+                      onClick={() => setNewBatchCategory(cat.code)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        newBatchCategory === cat.code
+                          ? 'border-[#F95716] bg-[#F95716]/[0.08] shadow-sm'
+                          : 'border-orange-950/5 dark:border-orange-500/10 hover:bg-orange-950/[0.02]'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">{cat.name}</div>
+                      <div className="text-[10px] font-mono text-[#F95716]">{cat.temp}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Thông tin sản phẩm */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Tên sản phẩm *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newBatchName}
+                    onChange={(e) => setNewBatchName(e.target.value)}
+                    placeholder="Ví dụ: Xà Lách Thủy Canh VietGAP"
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Cơ sở sản xuất / Nông trại *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newBatchFarm}
+                    onChange={(e) => setNewBatchFarm(e.target.value)}
+                    placeholder="Tên nông trại..."
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Tổng khối lượng lô hàng (kg) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={newBatchWeight}
+                    onChange={(e) => setNewBatchWeight(e.target.value)}
+                    placeholder="VD: 500"
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs font-mono font-bold text-[#F95716] dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Biển số xe điều phối (Tùy chọn)</label>
+                  <input
+                    type="text"
+                    value={newBatchVehicle}
+                    onChange={(e) => setNewBatchVehicle(e.target.value)}
+                    placeholder="Để trống nếu chờ xe đến nhận"
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-orange-950/5 dark:border-orange-500/10">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-5 py-2.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 text-xs font-bold text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 cursor-pointer"
+                >
+                  Xác Nhận Khai Báo & Đúc Genesis #0
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <div className={`${CARD} space-y-5`}>
         <div className="flex items-center gap-2.5 pb-3 border-b border-orange-950/5 dark:border-orange-500/10">
           <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
@@ -1254,6 +1628,132 @@ export default function BatchesPage({
                 <ExternalLink size={13} />
               </Link>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KHAI BÁO LÔ NÔNG SẢN MỚI */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white dark:bg-[#1C140F] border border-orange-950/10 dark:border-orange-500/20 p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-orange-950/5 dark:border-orange-500/10">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <Plus size={18} />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                    Khai Báo Lô Nông Sản Mới & Đúc Khối Genesis #0
+                  </h3>
+                  <p className="text-[11px] text-neutral-400">
+                    Đăng ký lô hàng mới lên sổ cái Blockchain và niêm phong nguồn gốc điện tử
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/5 text-neutral-400 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                await handleCreateBatch(e);
+                setShowCreateModal(false);
+              }}
+              className="space-y-4"
+            >
+              {/* Chọn nhóm ngành hàng */}
+              <div>
+                <label className="text-xs font-bold text-neutral-500 block mb-2">
+                  CHỌN NHÓM NGÀNH HÀNG THỰC PHẨM
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {foodCategories.map((cat) => (
+                    <button
+                      type="button"
+                      key={cat.code}
+                      onClick={() => setNewBatchCategory(cat.code)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        newBatchCategory === cat.code
+                          ? 'border-[#F95716] bg-[#F95716]/[0.08] shadow-sm'
+                          : 'border-orange-950/5 dark:border-orange-500/10 hover:bg-orange-950/[0.02]'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">{cat.name}</div>
+                      <div className="text-[10px] font-mono text-[#F95716]">{cat.temp}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Thông tin sản phẩm */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Tên sản phẩm *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newBatchName}
+                    onChange={(e) => setNewBatchName(e.target.value)}
+                    placeholder="Ví dụ: Xà Lách Thủy Canh VietGAP"
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Cơ sở sản xuất / Nông trại *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newBatchFarm}
+                    onChange={(e) => setNewBatchFarm(e.target.value)}
+                    placeholder="Tên nông trại..."
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Tổng khối lượng lô hàng (kg) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={newBatchWeight}
+                    onChange={(e) => setNewBatchWeight(e.target.value)}
+                    placeholder="VD: 500"
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs font-mono font-bold text-[#F95716] dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 block mb-1">Biển số xe điều phối (Tùy chọn)</label>
+                  <input
+                    type="text"
+                    value={newBatchVehicle}
+                    onChange={(e) => setNewBatchVehicle(e.target.value)}
+                    placeholder="Để trống nếu chờ xe đến nhận"
+                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-orange-950/5 dark:border-orange-500/10">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-5 py-2.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 text-xs font-bold text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 cursor-pointer"
+                >
+                  Xác Nhận Khai Báo & Đúc Genesis #0
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

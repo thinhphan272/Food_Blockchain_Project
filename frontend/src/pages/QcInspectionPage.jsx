@@ -1,7 +1,10 @@
-import React from 'react';
-import { ShieldCheck } from '../components/MomentumIcons';
+import React, { useEffect } from 'react';
+import { ShieldCheck, CheckSquare, Layers } from '../components/MomentumIcons';
 
 export default function QcInspectionPage({
+  batches = [],
+  onSelectBatch,
+  currentUser,
   selectedBatch,
   handleRunQcAudit,
   qcAuditResult,
@@ -13,24 +16,84 @@ export default function QcInspectionPage({
   const CARD =
     'rounded-[28px] border border-orange-950/5 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:border-orange-500/10 dark:bg-[#1C140F]';
 
+  // Tự động chọn lô đầu tiên nếu chưa chọn
+  useEffect(() => {
+    if (!selectedBatch && batches.length > 0 && onSelectBatch) {
+      onSelectBatch(batches[0]);
+    }
+  }, [batches, selectedBatch, onSelectBatch]);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-[#1A1A1A] dark:text-[#F5F5F5]">
-            Kiểm định chất lượng & nghiệm thu QC
+            Kiểm định chất lượng & Cổng KCS TTI
           </h2>
           <p className="text-xs text-neutral-400 mt-1">
-            Đối soát vi khí hậu, đánh giá TTI và ký số Smart Contract
+            Nhân viên: {currentUser?.fullName || 'Trần Minh Khoa'} ({currentUser?.role || 'QC_INSPECTOR'}) &bull; Đối soát vi khí hậu, đánh giá động học Arrhenius TTI và ký số Smart Contract
           </p>
         </div>
         <button
           type="button"
           onClick={handleRunQcAudit}
-          className="px-4 py-2 rounded-full bg-[#F95716] text-white text-xs font-bold shadow-sm hover:brightness-105"
+          disabled={!selectedBatch}
+          className="px-5 py-2.5 rounded-full bg-[#F95716] text-white text-xs font-bold shadow-md hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer self-start sm:self-auto"
         >
           Kiểm toán TTI 72h ngay
         </button>
+      </div>
+
+      {/* THANH CHỌN LÔ HÀNG KIỂM ĐỊNH KCS */}
+      <div className={`${CARD} space-y-3`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers size={16} className="text-[#F95716]" />
+            <span className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+              Chọn lô hàng kiểm định KCS ({batches.length} lô):
+            </span>
+          </div>
+          <span className="text-xs font-mono font-bold text-[#F95716]">
+            Đang chọn: {selectedBatch?.batch_code || '---'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {batches.map((b) => {
+            const isSelected = selectedBatch?.batch_code === b.batch_code;
+            const st = String(b.status || 'CREATED').toUpperCase();
+            let stText = 'Chờ kiểm';
+            let stColor = 'bg-neutral-500/10 text-neutral-500';
+            if (st === 'DELIVERED') { stText = 'Đã cập bến (Chờ KCS)'; stColor = 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold'; }
+            else if (st === 'QC_ACCEPTED') { stText = 'Đã duyệt đạt'; stColor = 'bg-emerald-500/15 text-emerald-600 font-bold'; }
+            else if (st === 'QC_REJECTED') { stText = 'Đã từ chối'; stColor = 'bg-red-500/15 text-red-600 font-bold'; }
+            else if (st === 'IN_TRANSIT') { stText = 'Đang vận chuyển'; stColor = 'bg-purple-500/15 text-purple-600'; }
+
+            return (
+              <button
+                type="button"
+                key={b.batch_code}
+                onClick={() => onSelectBatch && onSelectBatch(b)}
+                className={`p-3 rounded-2xl border text-left min-w-[200px] shrink-0 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'border-[#F95716] bg-[#F95716]/[0.06] shadow-sm'
+                    : 'border-orange-950/5 dark:border-orange-500/10 hover:border-[#F95716]/30 bg-orange-950/[0.01]'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-xs font-mono font-bold text-[#F95716]">{b.batch_code}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${stColor}`}>{stText}</span>
+                </div>
+                <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] truncate mt-1">
+                  {b.product_name || b.productName}
+                </div>
+                <div className="text-[10.5px] text-neutral-400 truncate mt-0.5">
+                  {b.farm_name || b.farmName}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

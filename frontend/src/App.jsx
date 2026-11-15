@@ -1457,6 +1457,9 @@ function MainDashboardLayout() {
 
           {activeTab === 'batches' && (
             <BatchesPage
+              batches={accessibleBatches}
+              onSelectBatch={setSelectedBatch}
+              currentUser={currentUser}
               handleCreateBatch={handleCreateBatch}
               handleUpdateBatch={handleUpdateBatch}
               newBatchCategory={newBatchCategory}
@@ -1508,6 +1511,9 @@ function MainDashboardLayout() {
 
           {activeTab === 'qc' && (
             <QcInspectionPage
+              batches={accessibleBatches}
+              onSelectBatch={setSelectedBatch}
+              currentUser={currentUser}
               selectedBatch={selectedBatch}
               handleRunQcAudit={handleRunQcAudit}
               qcAuditResult={qcAuditResult}
@@ -1520,6 +1526,10 @@ function MainDashboardLayout() {
 
           {activeTab === 'shelf' && (
             <ShelfFefoPosPage
+              batches={accessibleBatches}
+              selectedBatch={selectedBatch}
+              onSelectBatch={setSelectedBatch}
+              currentUser={currentUser}
               scannerActive={scannerActive}
               setScannerActive={setScannerActive}
               posSerialInput={posSerialInput}
@@ -1533,6 +1543,9 @@ function MainDashboardLayout() {
 
           {activeTab === 'trace' && (
             <BlockchainTracePage
+              batches={accessibleBatches}
+              onSelectBatch={setSelectedBatch}
+              currentUser={currentUser}
               selectedBatch={selectedBatch}
               recallReason={recallReason}
               setRecallReason={setRecallReason}
