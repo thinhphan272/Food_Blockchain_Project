@@ -47,7 +47,7 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 // 1. Public Endpoints: Auth, System Health, WebSocket, Consumer QR Traceability
-                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/roles", "/api/v1/auth/users").permitAll()
+                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/google", "/api/v1/auth/roles", "/api/v1/auth/users").permitAll()
                 .requestMatchers("/api/v1/system/**", "/ws-smartchain/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/trace/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/profiles/**", "/api/v1/batches/**", "/api/v1/telemetry/**", "/api/v1/qc/**", "/api/v1/shelf/**", "/api/v1/nosql/**", "/api/v1/blockchain/**").permitAll()

@@ -274,7 +274,7 @@ export default function BatchesPage({
           className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 transition-all cursor-pointer self-start sm:self-auto"
         >
           <Plus size={16} />
-          + Khai Báo Lô Hàng Mới
+          Khai Báo Lô Hàng Mới
         </button>
       </div>
 
@@ -1628,132 +1628,6 @@ export default function BatchesPage({
                 <ExternalLink size={13} />
               </Link>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL KHAI BÁO LÔ NÔNG SẢN MỚI */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white dark:bg-[#1C140F] border border-orange-950/10 dark:border-orange-500/20 p-6 sm:p-7 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-orange-950/5 dark:border-orange-500/10">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <Plus size={18} />
-                </span>
-                <div>
-                  <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
-                    Khai Báo Lô Nông Sản Mới & Đúc Khối Genesis #0
-                  </h3>
-                  <p className="text-[11px] text-neutral-400">
-                    Đăng ký lô hàng mới lên sổ cái Blockchain và niêm phong nguồn gốc điện tử
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-white/5 text-neutral-400 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                await handleCreateBatch(e);
-                setShowCreateModal(false);
-              }}
-              className="space-y-4"
-            >
-              {/* Chọn nhóm ngành hàng */}
-              <div>
-                <label className="text-xs font-bold text-neutral-500 block mb-2">
-                  CHỌN NHÓM NGÀNH HÀNG THỰC PHẨM
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {foodCategories.map((cat) => (
-                    <button
-                      type="button"
-                      key={cat.code}
-                      onClick={() => setNewBatchCategory(cat.code)}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                        newBatchCategory === cat.code
-                          ? 'border-[#F95716] bg-[#F95716]/[0.08] shadow-sm'
-                          : 'border-orange-950/5 dark:border-orange-500/10 hover:bg-orange-950/[0.02]'
-                      }`}
-                    >
-                      <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">{cat.name}</div>
-                      <div className="text-[10px] font-mono text-[#F95716]">{cat.temp}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Thông tin sản phẩm */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 block mb-1">Tên sản phẩm *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newBatchName}
-                    onChange={(e) => setNewBatchName(e.target.value)}
-                    placeholder="Ví dụ: Xà Lách Thủy Canh VietGAP"
-                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 block mb-1">Cơ sở sản xuất / Nông trại *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newBatchFarm}
-                    onChange={(e) => setNewBatchFarm(e.target.value)}
-                    placeholder="Tên nông trại..."
-                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 block mb-1">Tổng khối lượng lô hàng (kg) *</label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    value={newBatchWeight}
-                    onChange={(e) => setNewBatchWeight(e.target.value)}
-                    placeholder="VD: 500"
-                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs font-mono font-bold text-[#F95716] dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 block mb-1">Biển số xe điều phối (Tùy chọn)</label>
-                  <input
-                    type="text"
-                    value={newBatchVehicle}
-                    onChange={(e) => setNewBatchVehicle(e.target.value)}
-                    placeholder="Để trống nếu chờ xe đến nhận"
-                    className="w-full rounded-2xl border border-orange-950/10 bg-orange-950/[0.02] p-3 text-xs dark:border-orange-500/10 dark:bg-white/[0.02] focus:outline-none focus:border-[#F95716]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-orange-950/5 dark:border-orange-500/10">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-5 py-2.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 text-xs font-bold text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
-                >
-                  Hủy Bỏ
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 cursor-pointer"
-                >
-                  Xác Nhận Khai Báo & Đúc Genesis #0
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -52,6 +52,14 @@ export const registerUser = async (payload) => {
   return res.data;
 };
 
+export const googleSignInApi = async (email, name = '', phone = '') => {
+  const res = await apiClient.post('/auth/google', { email, name, phone });
+  if (res.data?.token) {
+    localStorage.setItem('smartchain_jwt_token', res.data.token);
+  }
+  return res.data;
+};
+
 export const toggleUserStatus = async (userId, isActive) => {
   const res = await apiClient.patch(`/auth/users/${userId}/status`, { isActive });
   return res.data;

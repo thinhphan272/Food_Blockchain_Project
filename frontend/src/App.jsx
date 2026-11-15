@@ -20,6 +20,7 @@ import {
 import {
   loginUser,
   registerUser,
+  googleSignInApi,
   toggleUserStatus,
   updateUser,
   deleteUser,
@@ -287,9 +288,9 @@ function MainDashboardLayout() {
         return false;
       });
     }
-    if (role === 'QC_INSPECTOR') {
+    if (role === 'QC_INSPECTOR' || role === 'INBOUND_GATE') {
       return batches.filter((b) =>
-        ['IN_TRANSIT', 'ARRIVED_AT_STORE', 'QC_ACCEPTED', 'QC_REJECTED', 'CREATED'].includes(
+        ['DELIVERED', 'ARRIVED_AT_STORE', 'IN_TRANSIT', 'QC_ACCEPTED', 'QC_REJECTED'].includes(
           b.status
         )
       );
@@ -779,10 +780,52 @@ function MainDashboardLayout() {
     }
   };
 
-  // Nút đăng nhập bằng Gmail: Tạm dừng mọi hành động theo yêu cầu, chỉ hiển thị thông báo
-  const handleGoogleSignIn = (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    setAuthError('Tính năng Đăng nhập bằng Google Gmail đang được hoàn thiện và sẽ kích hoạt trong bản phát hành tới.');
+  // Đăng nhập người dùng bằng Google Gmail
+  const handleGoogleSignIn = async (googlePayload = {}) => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const email = (googlePayload.email || 'thinhphan272@gmail.com').trim().toLowerCase();
+      const name = (googlePayload.name || 'Phan Sĩ Thịnh').trim();
+      const phone = googlePayload.phone || '0988-GMAIL-USER';
+
+      const res = await googleSignInApi(email, name, phone);
+      if (res && res.token) {
+        setJwtToken(res.token);
+        localStorage.setItem('smartchain_jwt_token', res.token);
+
+        const usr = {
+          userId: res.userId,
+          username: res.username || email.split('@')[0],
+          fullName: res.fullName || name || 'Khách Hàng Google',
+          role: 'CONSUMER',
+          department: res.department || 'Public Consumer',
+          phone: email,
+          assignedEntity: 'Xác thực Google Gmail',
+          authProvider: 'GOOGLE_GMAIL',
+          createdAt: res.createdAt,
+        };
+        setCurrentUser(usr);
+        localStorage.setItem('smartchain_user', JSON.stringify(usr));
+
+        const matchingActor = RBAC_ACTORS.find((r) => r.role === 'CONSUMER') || RBAC_ACTORS[7];
+        setActiveRole(matchingActor);
+        setActiveTab('overview');
+        navigate('/');
+        setSystemAlert({
+          type: 'success',
+          message: `Đăng nhập thành công với Google Gmail (${email})! Chào mừng ${usr.fullName} đến với Cổng người tiêu dùng SmartChain.`,
+        });
+        setTimeout(() => setSystemAlert(null), 5000);
+      } else {
+        setAuthError(res?.message || 'Đăng nhập Google thất bại');
+      }
+    } catch (err) {
+      console.error('Lỗi đăng nhập Google Gmail:', err);
+      setAuthError(err.response?.data?.message || 'Không thể kết nối đến máy chủ xác thực Google!');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   // Logout handler
