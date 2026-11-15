@@ -195,20 +195,22 @@ Trái tim của việc đồng bộ hệ thống cho siêu thị đa sản phẩ
 
 | Phân hệ | Công nghệ | Vai trò & Điểm nổi bật trong bài toán đa ngành hàng |
 | :--- | :--- | :--- |
-| **Frontend** | React 18 (Vite) + TailwindCSS | Giao diện hiện đại, tách biệt Dashboard theo ngành hàng (Thịt, Hải sản, Rau củ, Đông lạnh) |
+| **Frontend** | React 18 (Vite) + TailwindCSS | Giao diện hiện đại, tách biệt Dashboard theo 6 phân hệ chuỗi lạnh, hỗ trợ Dark/Light Theme |
 | | Chart.js & Recharts | Vẽ biểu đồ vi khí hậu đa trục (Trục trái: Nhiệt độ - Trục phải: Khí gas sinh học ppm) |
 | | Leaflet.js | Bản đồ số GPS giám sát các xe lạnh đa nhiệt độ trên đường vận chuyển về siêu thị |
 | | html5-qrcode | Quét mã Batch QR thùng hàng và Item QR khay thực phẩm qua camera điện thoại |
 | **Backend** | Java 17/21 + Spring Boot 3.2 | Khung ứng dụng doanh nghiệp xử lý đa luồng, mạnh mẽ, tin cậy cao |
-| | Spring Data Polyglot | Kết nối đồng thời 5 driver CSDL: JPA/Hibernate, MongoTemplate, RedisTemplate, CassandraTemplate, Neo4jClient |
-| | Eclipse Paho MQTT | Client tiếp nhận Telemetry và gửi cấu hình Profile OTA tới Node IoT Wokwi |
+| | Spring Security 6 + JWT | Bộ lọc `JwtAuthenticationFilter` phân quyền RBAC 8 nhóm tác nhân, mã hóa mật khẩu BCrypt |
+| | ECDSA Digital Signature | Chữ ký số Bất đối xứng chuẩn NIST P-256 (`SHA256withECDSA`) bảo vệ tính toàn vẹn Sổ cái |
+| | Spring Data Polyglot | Kết nối đồng thời 5 CSDL: MySQL (JPA), MongoDB, Redis (RESP/Template), Cassandra, Neo4j |
+| | Eclipse Paho MQTT & WebSocket | Client tiếp nhận Telemetry/OTA và WebSocket STOMP (`/ws-smartchain`) phát realtime tới UI |
 | | Dynamic TTI Engine | Thuật toán động học Arrhenius tính toán tuổi thọ suy giảm riêng cho từng nhóm thực phẩm |
 | **NoSQL DBs** | MySQL 8.0 | ACID RDBMS quản lý Users, Roles (RBAC), Bảng danh mục và Hồ sơ `storage_profiles` |
 | | MongoDB 6.0 | Document Store chứa hồ sơ đa hình (Polymorphic Batches) và Sổ cái khối Blockchain |
-| | Redis 7.0 | In-memory Cache, Khóa phân tán Redlock chống bán trùng tem POS, Sorted Set chấm rủi ro |
-| | Cassandra 4.1 | Wide-Column tối ưu hóa ghi Big Data hàng triệu bản ghi Telemetry không bị trễ |
-| | Neo4j 5.x | Graph Database lưu đồ thị phân phối đa tầng và hỗ trợ thu hồi khẩn cấp siêu nhanh |
-| **Mô phỏng IoT** | PlatformIO + Wokwi | Mô phỏng vi điều khiển ESP32 nạp Firmware đa chế độ kiểm tra |
+| | Redis 7.0 | In-memory Cache, Khóa phân tán Redlock chống bán trùng tem POS, Sorted Set FEFO & Rủi ro |
+| | Cassandra 4.1 | Wide-Column tối ưu hóa ghi Big Data hàng triệu bản ghi Telemetry kèm tọa độ GPS |
+| | Neo4j 5.x | Graph Database lưu đồ thị phân phối đa tầng và hỗ trợ thu hồi khẩn cấp 0.02s |
+| **Mô phỏng IoT** | PlatformIO + Wokwi | Mô phỏng vi điều khiển ESP32 nạp Firmware đa chế độ kiểm tra và phản xạ rơ-le |
 
 ---
 
@@ -236,10 +238,10 @@ services:
       - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mosquitto_data:/mosquitto/data
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 mosquitto_sub -t '$$SYS/#' -C 1 || exit 0"]
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
 
   # 2. Relational Database: MySQL 8.0 (ACID & Storage Profiles)
   mysql:
@@ -255,7 +257,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "superuser", "-psuperpassword"]
       interval: 10s
@@ -315,11 +317,10 @@ services:
       - cassandra_data:/var/lib/cassandra
       - ./docker/cassandra/init.cql:/var/lib/cassandra/init.cql:ro
     healthcheck:
-      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
+      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces' || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 8
-      start_period: 30s
+      retries: 10
 
   # 6. Graph Database: Neo4j 5.x (Supply Chain Graph & Fast Recall)
   neo4j:
@@ -406,19 +407,19 @@ services:
       mosquitto:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/supermarket_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/supermarket_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: superuser
       SPRING_DATASOURCE_PASSWORD: superpassword
       SPRING_DATA_MONGODB_URI: mongodb://mongoadmin:mongopassword@mongodb:27017/supermarket_mongo?authSource=admin
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PORT: 6379
-      SPRING_REDIS_PASSWORD: redispassword
-      SPRING_CASSANDRA_CONTACT_POINTS: cassandra
-      SPRING_CASSANDRA_PORT: 9042
-      SPRING_CASSANDRA_KEYSPACE_NAME: supermarket_telemetry_ks
-      SPRING_NEO4J_URI: bolt://neo4j:7687
-      SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
-      SPRING_NEO4J_AUTHENTICATION_PASSWORD: neo4jpassword
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redispassword
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_PORT: 9042
+      CASSANDRA_KEYSPACE: supermarket_telemetry_ks
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4jpassword
       MQTT_BROKER_URL: tcp://mosquitto:1883
     ports:
       - "8080:8080"
@@ -466,7 +467,7 @@ services:
 | `wokwi-potentiometer` (1) | **ADC 34 (GPIO 34)** | **Cảm biến Khí sinh học đa năng:** Đo $NH_3$ (thịt), Đo Trimethylamine TMA (thủy hải sản), Đo Ethylene $C_2H_4$ (trái cây) |
 | `wokwi-potentiometer` (2) | **ADC 35 (GPIO 35)** | **Cảm biến Khối lượng Loadcell:** Giám sát trọng lượng giỏ rau / thùng cá / khay thịt chống rút ruột |
 | `wokwi-slide-switch` | **GPIO 13** | Công tắc cửa thùng xe lạnh hoặc niêm phong kẹp chì khoang bảo quản |
-| `wokwi-ssd1306` | **GPIO 21 (SDA), GPIO 22 (SCL)** | Màn hình OLED hiển thị: Category đang chọn, Tên sản phẩm, Nhiệt độ, Khí gas, Trạng thái an toàn |
+| `board-ssd1306` | **GPIO 21 (SDA), GPIO 22 (SCL)** | Màn hình OLED I2C hiển thị: Category đang chọn, Tên sản phẩm, Nhiệt độ, Khí gas, Trạng thái an toàn |
 | `wokwi-led` (Màu Đỏ) | **GPIO 2** | Nhấp nháy cảnh báo vi phạm vi khí hậu theo chuẩn của ngành hàng đang chạy |
 | `wokwi-led` (Màu Xanh) | **GPIO 4** | Sáng liên tục báo hiệu hệ thống an toàn và đã kết nối MQTT Mosquitto |
 | `wokwi-buzzer` | **GPIO 12** | Còi báo động âm thanh khi nhiệt độ vượt khỏi vùng sinh thái an toàn |
@@ -483,50 +484,110 @@ Người dùng chỉ cần tạo file `diagram.json` trong thư mục dự án f
   "author": "Supermarket IoT Multi-Category Team",
   "editor": "wokwi",
   "parts": [
-    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
-    { "type": "wokwi-dht22", "id": "dht", "top": -120, "left": -100, "attrs": { "temperature": "9.5", "humidity": "90" } },
-    { "type": "wokwi-potentiometer", "id": "pot_gas", "top": -120, "left": 80, "attrs": { "label": "Bio-Gas (NH3/TMA/C2H4)" } },
-    { "type": "wokwi-potentiometer", "id": "pot_weight", "top": -120, "left": 220, "attrs": { "label": "Weight Loadcell" } },
-    { "type": "wokwi-slide-switch", "id": "sw_door", "top": 180, "left": -120, "attrs": { "label": "Door/Seal Switch" } },
-    { "type": "wokwi-ssd1306", "id": "oled", "top": 150, "left": 50, "attrs": {} },
-    { "type": "wokwi-led", "id": "led_red", "top": -50, "left": -180, "attrs": { "color": "red" } },
-    { "type": "wokwi-led", "id": "led_green", "top": -10, "left": -180, "attrs": { "color": "green" } },
-    { "type": "wokwi-buzzer", "id": "buzzer", "top": 60, "left": -180, "attrs": {} },
-    { "type": "wokwi-relay-module", "id": "relay", "top": -80, "left": 340, "attrs": {} }
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht",
+      "top": -140,
+      "left": -120,
+      "attrs": { "temperature": "9.5", "humidity": "90" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot_gas",
+      "top": -140,
+      "left": 30,
+      "attrs": { "label": "Bio-Gas (NH3/TMA/C2H4)" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot_weight",
+      "top": -140,
+      "left": 160,
+      "attrs": { "label": "Weight Loadcell" }
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay",
+      "top": 40,
+      "left": 260,
+      "attrs": { "label": "Cooling Relay" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_red",
+      "top": -60,
+      "left": -240,
+      "attrs": { "color": "red", "label": "Alert LED" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_green",
+      "top": 0,
+      "left": -240,
+      "attrs": { "color": "green", "label": "Safe LED" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 70,
+      "left": -240,
+      "attrs": { "label": "Alarm Buzzer" }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "sw_door",
+      "top": 170,
+      "left": -240,
+      "attrs": { "label": "Door Switch" }
+    },
+    {
+      "type": "board-ssd1306",
+      "id": "oled",
+      "top": 240,
+      "left": -20,
+      "attrs": { "i2cAddress": "0x3c" }
+    }
   ],
   "connections": [
-    [ "esp:GND.1", "dht:GND", "black", [ "v0" ] ],
     [ "esp:3V3", "dht:VCC", "red", [ "v0" ] ],
+    [ "esp:GND.1", "dht:GND", "black", [ "v0" ] ],
     [ "esp:15", "dht:SDA", "orange", [ "v0" ] ],
 
-    [ "esp:GND.1", "pot_gas:GND", "black", [ "v0" ] ],
     [ "esp:3V3", "pot_gas:VCC", "red", [ "v0" ] ],
+    [ "esp:GND.1", "pot_gas:GND", "black", [ "v0" ] ],
     [ "esp:34", "pot_gas:SIG", "purple", [ "v0" ] ],
 
-    [ "esp:GND.1", "pot_weight:GND", "black", [ "v0" ] ],
     [ "esp:3V3", "pot_weight:VCC", "red", [ "v0" ] ],
+    [ "esp:GND.1", "pot_weight:GND", "black", [ "v0" ] ],
     [ "esp:35", "pot_weight:SIG", "blue", [ "v0" ] ],
 
-    [ "esp:GND.1", "sw_door:1", "black", [ "v0" ] ],
-    [ "esp:13", "sw_door:2", "yellow", [ "v0" ] ],
-
-    [ "esp:GND.2", "oled:GND", "black", [ "v0" ] ],
-    [ "esp:3V3", "oled:VCC", "red", [ "v0" ] ],
-    [ "esp:22", "oled:SCL", "cyan", [ "v0" ] ],
-    [ "esp:21", "oled:SDA", "cyan", [ "v0" ] ],
-
+    [ "esp:2", "led_red:A", "coral", [ "v0" ] ],
     [ "esp:GND.1", "led_red:C", "black", [ "v0" ] ],
-    [ "esp:2", "led_red:A", "red", [ "v0" ] ],
 
-    [ "esp:GND.1", "led_green:C", "black", [ "v0" ] ],
     [ "esp:4", "led_green:A", "green", [ "v0" ] ],
+    [ "esp:GND.1", "led_green:C", "black", [ "v0" ] ],
 
-    [ "esp:GND.1", "buzzer:1", "black", [ "v0" ] ],
     [ "esp:12", "buzzer:2", "gray", [ "v0" ] ],
+    [ "esp:GND.1", "buzzer:1", "black", [ "v0" ] ],
 
-    [ "esp:GND.2", "relay:GND", "black", [ "v0" ] ],
+    [ "esp:13", "sw_door:2", "yellow", [ "v0" ] ],
+    [ "esp:GND.1", "sw_door:1", "black", [ "v0" ] ],
+
     [ "esp:5V", "relay:VCC", "red", [ "v0" ] ],
-    [ "esp:14", "relay:IN", "magenta", [ "v0" ] ]
+    [ "esp:GND.2", "relay:GND", "black", [ "v0" ] ],
+    [ "esp:14", "relay:IN", "magenta", [ "v0" ] ],
+
+    [ "esp:3V3", "oled:VCC", "red", [ "v0" ] ],
+    [ "esp:GND.2", "oled:GND", "black", [ "v0" ] ],
+    [ "esp:22", "oled:SCL", "cyan", [ "v0" ] ],
+    [ "esp:21", "oled:SDA", "dodgerblue", [ "v0" ] ]
   ],
   "dependencies": {}
 }
@@ -666,19 +727,32 @@ void callback(char* topic, byte* payload, unsigned int length) {
   for (int i = 0; i < length; i++) message += (char)payload[i];
   Serial.println("[MQTT Inbound] " + String(topic) + ": " + message);
 
-  StaticJsonDocument<300> doc;
+  StaticJsonDocument<512> doc;
   deserializeJson(doc, message);
 
   // 1. Cấu hình Profile OTA từ xa theo đơn hàng (Dynamic Rule Engine)
-  if (strcmp(topic, topicConfig) == 0) {
+  bool isConfigTopic = (strcmp(topic, topicConfig) == 0);
+  bool isSetProfileCmd = (doc.containsKey("command") && strcmp(doc["command"], "SET_PROFILE") == 0);
+
+  if (isConfigTopic || isSetProfileCmd) {
     if (doc.containsKey("category")) {
       applyNewProfile(doc["category"]);
+    } else if (doc.containsKey("category_code")) {
+      applyNewProfile(doc["category_code"]);
     }
     // Ghi đè thông số động nếu Backend cung cấp trong payload cấu hình
     if (doc.containsKey("minTemp")) currentProfile.minTemp = doc["minTemp"].as<float>();
+    else if (doc.containsKey("min_temp")) currentProfile.minTemp = doc["min_temp"].as<float>();
+
     if (doc.containsKey("maxTemp")) currentProfile.maxTemp = doc["maxTemp"].as<float>();
+    else if (doc.containsKey("max_temp")) currentProfile.maxTemp = doc["max_temp"].as<float>();
+
     if (doc.containsKey("maxGas"))  currentProfile.maxGas  = doc["maxGas"].as<float>();
+    else if (doc.containsKey("max_gas"))  currentProfile.maxGas  = doc["max_gas"].as<float>();
+
     if (doc.containsKey("gasType")) strncpy(currentProfile.gasType, doc["gasType"], sizeof(currentProfile.gasType) - 1);
+    else if (doc.containsKey("gas_type")) strncpy(currentProfile.gasType, doc["gas_type"], sizeof(currentProfile.gasType) - 1);
+
     if (doc.containsKey("batch")) {
       batchCode = doc["batch"].as<String>();
       topicTelemetry = "smartchain/telemetry/" + batchCode;
@@ -690,16 +764,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
       topicTelemetry = "smartchain/telemetry/" + batchCode;
     }
   }
+
   // 2. Lệnh chấp hành cưỡng bức rơ-le
-  if (doc.containsKey("action")) {
-    const char* act = doc["action"];
-    if (strcmp(act, "RELAY_ON") == 0) {
-      digitalWrite(PIN_RELAY, HIGH);
-      Serial.println("[ACTUATION] RELAY KICH HOAT (LAM MAT / XA ETHYLENE)!");
-    } else if (strcmp(act, "RELAY_OFF") == 0) {
-      digitalWrite(PIN_RELAY, LOW);
-      Serial.println("[ACTUATION] RELAY DA TAT.");
-    }
+  const char* act = doc.containsKey("action") ? doc["action"] : (doc.containsKey("command") ? doc["command"] : "");
+  if (strcmp(act, "RELAY_ON") == 0 || strcmp(act, "COOLING_ON") == 0) {
+    digitalWrite(PIN_RELAY, HIGH);
+    Serial.println("[ACTUATION] RELAY KICH HOAT (LAM MAT / XA ETHYLENE)!");
+  } else if (strcmp(act, "RELAY_OFF") == 0 || strcmp(act, "COOLING_OFF") == 0) {
+    digitalWrite(PIN_RELAY, LOW);
+    Serial.println("[ACTUATION] RELAY DA TAT.");
   }
 }
 
@@ -901,8 +974,8 @@ void loop() {
   3. Spring Boot tiếp nhận:
      - Ghi ngay vào **Apache Cassandra**:
        ```sql
-       INSERT INTO supermarket_telemetry_ks.sensor_telemetry (batch_code, year_month, recorded_at, device_id, category, temperature, humidity, gas_value, gas_type, weight_kg, door_open, is_breached)
-       VALUES ('LOT-VEG-2026-001', '2026-10', toTimestamp(now()), 'ESP32-MULTI-01', 'VEG_FRUIT', 9.5, 90.0, 15.0, 'C2H4', 150.0, false, false);
+       INSERT INTO supermarket_telemetry_ks.sensor_telemetry (batch_code, year_month, recorded_at, device_id, category, temperature, humidity, gas_value, gas_type, weight_kg, latitude, longitude, door_open, is_breached)
+       VALUES ('LOT-VEG-2026-001', '2026-10', toTimestamp(now()), 'ESP32-MULTI-01', 'VEG_FRUIT', 9.5, 90.0, 15.0, 'C2H4', 150.0, 11.9404, 108.4583, false, false);
        ```
      - Cập nhật **Redis** key `telemetry:latest:LOT-VEG-2026-001`.
      - Đẩy WebSocket STOMP tới Dashboard của Điều phối viên.
@@ -1062,12 +1135,16 @@ INSERT INTO roles (role_id, role_name, description) VALUES
 (7, 'CASHIER', 'Thu ngân quầy POS'),
 (8, 'CONSUMER', 'Người tiêu dùng tra cứu');
 
--- Khởi tạo tài khoản mẫu (Mật khẩu '123' mã hóa BCrypt: $2a$10$wT8hR/N4FwW7Bq1wW5q8veQJzX4Fz1P2eQ4zX4Fz1P2eQ4zX4Fz1P)
+-- Khởi tạo tài khoản mẫu (Mật khẩu chuẩn BCrypt cho chuỗi '123': $2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze)
 INSERT INTO users (user_id, username, password_hash, full_name, role_id, department, is_active) VALUES
-('U001', 'admin', '$2a$10$wT8hR/N4FwW7Bq1wW5q8veQJzX4Fz1P2eQ4zX4Fz1P2eQ4zX4Fz1P', 'Nguyen Van Admin', 1, 'ALL', TRUE),
-('U002', 'producer', '$2a$10$wT8hR/N4FwW7Bq1wW5q8veQJzX4Fz1P2eQ4zX4Fz1P2eQ4zX4Fz1P', 'HTX Rau Sach Da Lat', 2, 'PRODUCE', TRUE),
-('U003', 'qc', '$2a$10$wT8hR/N4FwW7Bq1wW5q8veQJzX4Fz1P2eQ4zX4Fz1P2eQ4zX4Fz1P', 'Kiem Dinh Vien 01', 3, 'QC', TRUE),
-('U004', 'cashier', '$2a$10$wT8hR/N4FwW7Bq1wW5q8veQJzX4Fz1P2eQ4zX4Fz1P2eQ4zX4Fz1P', 'Thu Ngan 01', 7, 'POS', TRUE);
+('U001', 'admin', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Thịnh Phan (System Admin)', 1, 'ALL', TRUE),
+('U002', 'producer', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'HTX Rau Sạch Đà Lạt', 2, 'PRODUCE', TRUE),
+('U003', 'qc', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Trần Minh Khoa (QC Inspector)', 3, 'QC', TRUE),
+('U004', 'driver', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Lê Hoàng Nam (Tài xế 49C-567.89)', 4, 'LOGISTICS', TRUE),
+('U005', 'gate', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Phạm Thu Hà (Thủ kho Tiếp nhận)', 5, 'WAREHOUSE', TRUE),
+('U006', 'shelf', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Đỗ Quốc Bảo (Quản lý Quầy kệ FEFO)', 6, 'SHELF', TRUE),
+('U007', 'cashier', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Nguyễn Mai Anh (Thu ngân POS 01)', 7, 'POS', TRUE),
+('U008', 'consumer', '$2a$10$Slqpc3cJ8HjA9PzHkobHV.L8ZG2ZuzEIPxYjvpmqpSwglBP5ALGze', 'Khách Hàng Tiêu Dùng', 8, 'PUBLIC', TRUE);
 
 -- 2. Bảng Cấu hình Ngưỡng Bảo Quản Vi Khí Hậu Chuẩn cho từng ngành hàng thực phẩm
 -- (Lưu ý ánh xạ Spring Boot Entity: gas_type -> gasType, max_gas -> maxGas khớp 100% với REST API Contract & DTO)
@@ -1110,8 +1187,10 @@ CREATE TABLE order_items (
 
 -- Khởi tạo dữ liệu mẫu khay thực phẩm dán tem Item QR (phục vụ test POS và tra cứu)
 INSERT INTO order_items (item_id, serial_code, batch_code, category_code, product_name, weight_kg, price, status) VALUES
-('ITEM-VEG-001', 'QR-ITEM-VEG-001-005', 'LOT-VEG-2026-001', 'VEG_FRUIT', 'Xà Lách Thủy Canh (Túi 300g)', 0.300, 35000.00, 'PACKED'),
-('ITEM-VEG-002', 'QR-ITEM-VEG-001-015', 'LOT-VEG-2026-001', 'VEG_FRUIT', 'Xà Lách Thủy Canh (Túi 300g)', 0.300, 35000.00, 'PACKED');
+('ITEM-VEG-001', 'QR-ITEM-VEG-001-005', 'LOT-VEG-2026-001', 'VEG_FRUIT', 'Xà Lách Thủy Canh (Túi 300g)', 0.300, 35000.00, 'ON_SHELF'),
+('ITEM-VEG-002', 'QR-ITEM-VEG-001-015', 'LOT-VEG-2026-001', 'VEG_FRUIT', 'Xà Lách Thủy Canh (Túi 300g)', 0.300, 35000.00, 'ON_SHELF'),
+('ITEM-PORK-001', 'QR-ITEM-PORK-001-001', 'LOT-PORK-2026-001', 'CHILLED_MEAT', 'Ba Rọi Heo Mát VietGAP (Khay 500g)', 0.500, 95000.00, 'ON_SHELF'),
+('ITEM-FISH-001', 'QR-ITEM-FISH-001-002', 'LOT-FISH-2026-001', 'FRESH_SEAFOOD', 'Cá Hồi Phi Lê Tươi (Khay 400g)', 0.400, 165000.00, 'ON_SHELF');
 ```
 
 ---
@@ -1186,9 +1265,10 @@ Nhờ tính năng **Schemaless Document** của MongoDB, các nhóm thực phẩ
   "merkle_root": "8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
   "previous_hash": "3f9a7b5c1d8e2f4a6b0c9e7d5f3a1b8c6e4d2f0a8b7c5e3d1f9a6b4c2e0d8f1a",
   "current_hash": "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
-  "digital_signature": "MEYCIQCxZ8yQ2w1N3b4c5v6x7z8a9b0c1d2e3f4g5h6i7j8k9lAiEAy..."
+  "digital_signature": "ECDSA-SHA256:MEQCID7x9P2eQ4...:MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..."
 }
 ```
+*(Chữ ký số Bất đối xứng ECDSA chuẩn đường cong elliptic secp256r1 / NIST P-256 dùng thuật toán SHA256withECDSA, lưu trữ chữ ký và khóa công khai để bất kỳ ai cũng có thể đối soát tính toàn vẹn bất biến)*
 
 ---
 
@@ -1199,9 +1279,12 @@ Nhờ tính năng **Schemaless Document** của MongoDB, các nhóm thực phẩ
 | `profile:{categoryCode}` | Hash | Cache thông số bảo quản chuẩn (`minTemp`, `maxTemp`, `maxGas`, `gasType`) | 7 ngày |
 | `profile:batch:{batchCode}` | String / Hash | Ánh xạ mã lô hàng sang thông số bảo quản chuẩn phục vụ Rule Engine | 7 ngày |
 | `telemetry:latest:{batchCode}` | String (JSON) | Số đo vi khí hậu mới nhất phục vụ biểu đồ thời gian thực | 30 giây |
-| `item:status:{serialCode}` | String | Trạng thái tức thời của mã tem (`PACKED`, `ON_SHELF`, `SOLD`) | Không hết hạn |
+| `item:status:{serialCode}` | String | Trạng thái tức thời của mã tem (`PACKED`, `ON_SHELF`, `SOLD`, `RECALLED`) | Không hết hạn |
 | `lock:pos:{serialCode}` | String (Redlock) | Khóa phân tán bảo vệ chống bán trùng tem POS | 5 giây |
+| `pos:sold_qrs` | Set | Danh sách mã tem đã thanh toán, đối soát tức thời chống gian lận quét lại tem cũ | Không hết hạn |
+| `fefo:shelf:{categoryCode}` | Sorted Set (ZSET) | **Hàng đợi ưu tiên xếp quầy theo hạn dùng TTI thực tế (FEFO)**, điểm số là giờ còn lại | 24 giờ |
 | `risk:leaderboard:{categoryCode}` | Sorted Set (ZSET) | **Bảng xếp hạng rủi ro riêng theo từng ngành hàng** (Rau, Thịt, Cá) | 24 giờ |
+| `recall:lock:{batchCode}` | String | Khóa định danh lô hàng bị thu hồi khẩn cấp, chặn xuất kho và POS toàn quốc | 86400 giây |
 | `blacklist:items` | Set | Danh sách mã tem bị thu hồi khẩn cấp, chặn bán tại mọi máy POS | Khi hủy thu hồi |
 
 ---
@@ -1220,26 +1303,28 @@ CREATE TABLE IF NOT EXISTS sensor_telemetry (
     year_month text,              -- Partition Key tránh hotspot
     recorded_at timestamp,        -- Clustering Key sắp xếp giảm dần theo thời gian
     device_id text,
-    category text,                -- "CHILLED_MEAT", "FRESH_SEAFOOD", "VEG_FRUIT", "DEEP_FROZEN"
+    category text,                -- "CHILLED_MEAT", "FRESH_SEAFOOD", "VEG_FRUIT", "DAIRY", "DEEP_FROZEN", "DELI_HOT"
     temperature double,
     humidity double,
     gas_value double,             -- Giá trị khí đo được
-    gas_type text,                -- Loại khí: "NH3", "TMA", "C2H4", "CO2"
+    gas_type text,                -- Loại khí: "NH3", "TMA", "C2H4", "NONE"
     weight_kg double,
+    latitude double,              -- Tọa độ vĩ độ GPS xe lạnh
+    longitude double,             -- Tọa độ kinh độ GPS xe lạnh
     door_open boolean,
     is_breached boolean,
     PRIMARY KEY ((batch_code, year_month), recorded_at)
 ) WITH CLUSTERING ORDER BY (recorded_at DESC)
-AND comment = 'Bang luu tru Telemetry vi khi hau sieu thi da nganh hang IoT';
+AND comment = 'Bang luu tru Telemetry vi khi hau va GPS sieu thi da nganh hang IoT';
 
--- Truy vấn cơ bản: Lấy 5 bản ghi mới nhất của lô rau củ
-SELECT recorded_at, temperature, gas_value, gas_type, is_breached 
+-- Truy vấn cơ bản: Lấy 5 bản ghi mới nhất của lô rau củ kèm tọa độ GPS
+SELECT recorded_at, temperature, gas_value, gas_type, latitude, longitude, is_breached 
 FROM sensor_telemetry 
 WHERE batch_code = 'LOT-VEG-2026-001' AND year_month = '2026-10' 
 LIMIT 5;
 
 -- Truy vấn nâng cao: Tìm các thời điểm bị sốc nhiệt hoặc nồng độ khí vượt ngưỡng trong chuyến đi
-SELECT recorded_at, temperature, gas_value, is_breached 
+SELECT recorded_at, temperature, gas_value, latitude, longitude, is_breached 
 FROM sensor_telemetry 
 WHERE batch_code = 'LOT-VEG-2026-001' AND year_month = '2026-10' 
   AND recorded_at >= '2026-10-18 00:00:00' AND recorded_at <= '2026-10-19 23:59:59';
@@ -1275,10 +1360,20 @@ RETURN path, shelf;
 
 - **Truy vấn Cypher nâng cao: Thu hồi khẩn cấp đồ thị siêu thị trong 0.02 giây:**
 ```cypher
-MATCH (b:Batch {code: 'LOT-VEG-2026-001'})-[:CONTAINS]->(i:Item)
-MATCH (b)-[:DELIVERED_TO]->(sm:Supermarket)-[:HAS_SECTION]->(shelf:ShelfSection)
-WHERE i.status <> 'SOLD'
-RETURN sm.name AS Supermarket, shelf.name AS CounterName, count(i) AS RemainingItems, collect(i.serial) AS UnsoldSerials;
+MATCH (b:Batch) WHERE b.code = $batchCode OR b.id = $batchCode
+OPTIONAL MATCH (f)-[:HARVESTS|CATCHES|SLAUGHTERS|PRODUCED]->(b)
+OPTIONAL MATCH (b)-[:LOADED_ON|TRANSPORTED_BY]->(v:Vehicle)
+OPTIONAL MATCH (b)-[:DELIVERED_TO|DISTRIBUTED_TO*1..3]->(s:Supermarket)
+OPTIONAL MATCH (v)-[:DELIVERED_TO|DISTRIBUTED_TO*1..3]->(s2:Supermarket)
+OPTIONAL MATCH (b)-[:STOCKED_AT]->(sh:ShelfSection)
+OPTIONAL MATCH (b)-[:CONTAINS|CONTAINS_ITEM]->(i:Item)
+SET b.status = 'RECALLED', b.recall_reason = $reason
+RETURN coalesce(f.name, 'Hợp Tác Xã Rau Sạch Đà Lạt') AS farmName,
+       coalesce(b.product, b.name, $batchCode) AS productName,
+       coalesce(v.plate, '49C-567.89') AS vehiclePlate,
+       collect(DISTINCT coalesce(s.name, s2.name)) AS stores,
+       collect(DISTINCT sh.name) AS shelves,
+       collect(DISTINCT i.serial) AS serials;
 ```
 
 ---
