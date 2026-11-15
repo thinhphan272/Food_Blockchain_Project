@@ -12,6 +12,11 @@ services:
     volumes:
       - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # 2. CSDL MySQL 8.0 (ACID & Storage Profiles)
   mysql:
@@ -27,7 +32,12 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "superuser", "-psuperpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # 3. CSDL MongoDB 6.0 (Batches & Blockchain Ledger)
   mongodb:
@@ -42,6 +52,12 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+      - ./docker/mongo/init-indexes.js:/docker-entrypoint-initdb.d/init-indexes.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # 4. CSDL Redis 7.0 (Cache, Redlock, Leaderboard)
   redis:
@@ -53,6 +69,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # 5. CSDL Apache Cassandra 4.1 (Time-Series Telemetry Big Data)
   cassandra:
@@ -69,6 +90,13 @@ services:
       - "9042:9042"
     volumes:
       - cassandra_data:/var/lib/cassandra
+      - ./docker/cassandra/init.cql:/var/lib/cassandra/init.cql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || cqlsh -e 'describe keyspaces' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # 6. CSDL Neo4j 5.x (Graph Network & Fast Recall)
   neo4j:
@@ -83,6 +111,11 @@ services:
       - "7687:7687" # Giao thức Bolt cho Backend kết nối
     volumes:
       - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mosquitto_data:

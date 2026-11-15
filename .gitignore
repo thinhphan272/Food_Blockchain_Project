@@ -14,12 +14,16 @@ backend/.mvn/
 backend/*.log
 backend/.flattened-pom.xml
 
-# 3. Phân hệ Frontend (Node.js / React / Vite)
+# 3. Phân hệ Frontend & Mobile (Node.js / React / Vite / Expo)
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
 frontend/*.local
 frontend/.pnpm-debug.log*
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
 
 # 4. Phân hệ IoT Embedded (PlatformIO / Wokwi)
 firmware/.pio/
