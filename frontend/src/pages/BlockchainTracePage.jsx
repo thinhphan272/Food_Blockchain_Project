@@ -9,6 +9,9 @@ import {
 import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaResolver';
 
 export default function BlockchainTracePage({
+  batches = [],
+  onSelectBatch,
+  currentUser,
   selectedBatch,
   recallReason,
   setRecallReason,
@@ -20,14 +23,69 @@ export default function BlockchainTracePage({
 
   const hasSelectedBatch = Boolean(selectedBatch?.batch_code);
   const selectedMedia = hasSelectedBatch ? resolveFoodBatchMedia(selectedBatch) : null;
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-black text-[#1A1A1A] dark:text-[#F5F5F5]">
-          Truy xuất nguồn gốc & Thu hồi khẩn cấp
-        </h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black text-[#1A1A1A] dark:text-[#F5F5F5]">
+            Minh Bạch Sổ Cái Blockchain & Lệnh Thu Hồi Khẩn Cấp
+          </h2>
+          <p className="text-xs text-neutral-400 mt-1">
+            Tra cứu toàn bộ thông tin mã hóa ECDSA và phân tích phả hệ chuỗi cung ứng bằng đồ thị Neo4j
+          </p>
+        </div>
       </div>
+
+      {/* THANH CHỌN LÔ HÀNG TRA CỨU */}
+      {batches.length > 0 && (
+        <div className={`${CARD} space-y-3`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+              Chọn lô hàng tra cứu ({batches.length} lô):
+            </span>
+            <span className="text-xs font-mono font-bold text-[#F95716]">
+              Đang chọn: {selectedBatch?.batch_code || 'Chưa chọn'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            {batches.map((b) => {
+              const isSelected = selectedBatch?.batch_code === b.batch_code;
+              const isRecalled = String(b.status || '').includes('RECALL');
+
+              return (
+                <button
+                  type="button"
+                  key={b.batch_code}
+                  onClick={() => onSelectBatch && onSelectBatch(b)}
+                  className={`p-3 rounded-2xl border text-left min-w-[200px] shrink-0 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-[#F95716] bg-[#F95716]/[0.06] shadow-sm'
+                      : 'border-orange-950/5 dark:border-orange-500/10 hover:border-[#F95716]/30 bg-orange-950/[0.01]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-mono font-bold text-[#F95716]">{b.batch_code}</span>
+                    {isRecalled && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-bold">
+                        ĐÃ THU HỒI
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] truncate mt-1">
+                    {b.product_name || b.productName}
+                  </div>
+                  <div className="text-[10.5px] text-neutral-400 truncate mt-0.5">
+                    {b.farm_name || b.farmName}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Cổng tra cứu khách hàng (Có hình nền đồng bộ với Login Khách hàng) */}
