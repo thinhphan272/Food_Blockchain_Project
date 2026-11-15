@@ -62,10 +62,77 @@ export default function AuthPages({
   // Xác định cổng hiện tại
   const currentPortal = isPathAdmin ? 'admin' : isPathEnterprise ? 'enterprise' : isPathConsumer ? 'consumer' : 'gateway';
 
-  // State hỗ trợ Đăng nhập Google Gmail trực tiếp
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
-  const [googleEmailInput, setGoogleEmailInput] = useState('thinhphan272@gmail.com');
-  const [googleNameInput, setGoogleNameInput] = useState('Phan Sĩ Thịnh');
+  // State cấu hình & điều phối Google OAuth 2.0 Thật (Google Identity Services)
+  const [showGoogleConfigModal, setShowGoogleConfigModal] = useState(false);
+  const [googleClientIdInput, setGoogleClientIdInput] = useState(() => {
+    return (
+      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      localStorage.getItem('smartchain_google_client_id') ||
+      ''
+    );
+  });
+
+  // Kích hoạt cửa sổ đăng nhập Google chính thức (accounts.google.com)
+  const triggerRealGoogleSignIn = (forcedClientId = null) => {
+    const clientId = (forcedClientId || googleClientIdInput || '').trim();
+
+    if (!clientId) {
+      setShowGoogleConfigModal(true);
+      return;
+    }
+
+    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+      setAuthError('Đang tải thư viện Google Identity Services từ Google... Vui lòng kiểm tra kết nối mạng và thử lại sau giây lát!');
+      return;
+    }
+
+    try {
+      setAuthError('');
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'openid email profile',
+        callback: async (tokenResponse) => {
+          if (tokenResponse.error) {
+            setAuthError('Đăng nhập Google bị hủy hoặc thất bại: ' + (tokenResponse.error_description || tokenResponse.error));
+            return;
+          }
+          if (!tokenResponse.access_token) {
+            setAuthError('Google không phản hồi Access Token hợp lệ!');
+            return;
+          }
+
+          // Gọi Google UserInfo API từ chính máy chủ Google để lấy dữ liệu thật
+          try {
+            const gRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+            });
+            const realUser = await gRes.json();
+            if (!realUser.email) {
+              throw new Error('Google không cung cấp địa chỉ email được xác thực!');
+            }
+
+            // Gửi dữ liệu thật kèm accessToken cho Backend SmartChain cấp JWT
+            await handleGoogleSignIn({
+              email: realUser.email,
+              name: realUser.name || realUser.given_name || 'Khách Hàng Google',
+              picture: realUser.picture || '',
+              accessToken: tokenResponse.access_token,
+              sub: realUser.sub,
+            });
+          } catch (err) {
+            console.error('Lỗi khi lấy thông tin Google User:', err);
+            setAuthError('Lỗi xác thực tài khoản Google: ' + err.message);
+          }
+        },
+      });
+
+      // Mở cửa sổ popup Google thật chính thức
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
+    } catch (err) {
+      console.error('Lỗi khởi tạo Google Token Client:', err);
+      setAuthError('Lỗi khởi tạo Google OAuth: ' + err.message);
+    }
+  };
 
   // Dữ liệu nội dung theo từng cổng chuyên biệt
   const heroContent = {
@@ -520,13 +587,23 @@ export default function AuthPages({
 
                       <button
                         type="button"
-                        onClick={() => setShowGoogleModal(true)}
+                        onClick={() => triggerRealGoogleSignIn()}
                         disabled={authLoading}
                         className="w-full flex items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/[0.12] hover:bg-white/[0.22] backdrop-blur-xl py-3 px-4 text-xs font-bold text-white shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
                       >
                         <GoogleGIcon size={18} />
-                        <span>Đăng nhập nhanh với Google Gmail</span>
+                        <span>Đăng nhập trực tiếp bằng Google (accounts.google.com)</span>
                       </button>
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowGoogleConfigModal(true)}
+                          className="text-[10px] text-white/50 hover:text-white underline cursor-pointer"
+                        >
+                          ⚙️ Cấu hình Google Client ID OAuth 2.0
+                        </button>
+                      </div>
                     </form>
                   ) : (
                     <form onSubmit={(e) => { e.preventDefault(); handleRegisterSubmit(e); }} className="space-y-3">
@@ -671,122 +748,98 @@ export default function AuthPages({
             <span className="hover:text-white cursor-pointer transition-colors">Hỗ Trợ Kỹ Thuật</span>
           </div>
         </footer>
-        {/* MODAL XÁC THỰC GOOGLE GMAIL CHÍNH CHỦ */}
-        {showGoogleModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in text-neutral-800">
-            <div className="w-full max-w-md rounded-3xl bg-white dark:bg-[#1C140F] border border-orange-950/10 dark:border-orange-500/20 p-6 shadow-2xl space-y-5">
+        {/* MODAL CẤU HÌNH & KẾT NỐI GOOGLE OAUTH 2.0 THẬT (GOOGLE IDENTITY SERVICES) */}
+        {showGoogleConfigModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in text-neutral-800">
+            <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-[#1C140F] border border-orange-950/10 dark:border-orange-500/20 p-6 sm:p-7 shadow-2xl space-y-5 text-left">
               <div className="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10">
-                    <GoogleGIcon size={20} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 shrink-0">
+                    <GoogleGIcon size={22} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
-                      Đăng Nhập Khách Hàng Bằng Google Gmail
+                    <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                      Kết Nối Google OAuth 2.0 Thật
                     </h3>
                     <p className="text-[11px] text-neutral-400">
-                      Tự động cấp chứng chỉ JWT cho tài khoản người tiêu dùng
+                      Mở cửa sổ đăng nhập trực tiếp từ máy chủ chính thức của Google (accounts.google.com)
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowGoogleModal(false)}
+                  onClick={() => setShowGoogleConfigModal(false)}
                   className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-400 cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              {/* Danh sách tài khoản gợi ý 1 chạm */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 block">
-                  Chọn Tài Khoản Gmail Có Sẵn (1 Chạm):
-                </label>
-                <div className="space-y-2">
-                  {[
-                    {
-                      email: 'thinhphan272@gmail.com',
-                      name: 'Phan Sĩ Thịnh',
-                      roleNote: 'Khách hàng thành viên thân thiết',
-                    },
-                    {
-                      email: 'consumer.vietgap@gmail.com',
-                      name: 'Khách Hàng SmartChain',
-                      roleNote: 'Người tiêu dùng kiểm tra mã QR',
-                    },
-                  ].map((acc) => (
-                    <button
-                      type="button"
-                      key={acc.email}
-                      onClick={async () => {
-                        setShowGoogleModal(false);
-                        await handleGoogleSignIn({ email: acc.email, name: acc.name });
-                      }}
-                      className="w-full p-3 rounded-2xl border border-neutral-200 dark:border-white/10 hover:border-[#F95716] bg-neutral-50 dark:bg-white/[0.03] hover:bg-[#F95716]/[0.05] text-left transition-all cursor-pointer flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-[#F95716] text-white flex items-center justify-center font-bold text-xs">
-                          {acc.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] group-hover:text-[#F95716] transition-colors">
-                            {acc.name}
-                          </div>
-                          <div className="text-[11px] font-mono text-neutral-400">
-                            {acc.email}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold">
-                        Đăng nhập ngay &rarr;
-                      </span>
-                    </button>
-                  ))}
+              {/* Hướng dẫn chi tiết tạo Google Client ID */}
+              <div className="p-4 rounded-2xl bg-orange-500/[0.06] border border-[#F95716]/20 text-xs text-[#1A1A1A] dark:text-[#F5F5F5] space-y-2">
+                <div className="font-bold text-[#F95716] flex items-center gap-1.5">
+                  <span>ℹ️ Hướng dẫn cấp phép Google OAuth 2.0 Web Client:</span>
                 </div>
+                <ol className="list-decimal pl-4 space-y-1.5 text-[11.5px] text-neutral-600 dark:text-neutral-300">
+                  <li>
+                    Truy cập trang Quản lý khóa Google:{' '}
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#F95716] underline font-semibold"
+                    >
+                      console.cloud.google.com/apis/credentials
+                    </a>
+                  </li>
+                  <li>Bấm <strong>Create Credentials</strong> &rarr; Chọn <strong>OAuth client ID</strong> &rarr; Application type: <strong>Web application</strong>.</li>
+                  <li>
+                    Tại mục <strong>Authorized JavaScript origins</strong>, thêm 2 địa chỉ sau:
+                    <div className="mt-1 space-y-1 font-mono text-[11px] bg-black/5 dark:bg-black/30 p-2 rounded-xl">
+                      <div>http://localhost:5173</div>
+                      <div>{window.location.origin}</div>
+                    </div>
+                  </li>
+                  <li>Sao chép mã <strong>Client ID</strong> (dạng: <span className="font-mono text-[#F95716]">...apps.googleusercontent.com</span>) và dán vào ô bên dưới.</li>
+                </ol>
               </div>
 
-              {/* Hoặc nhập email tùy chọn */}
-              <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 space-y-3">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 block">
-                  Hoặc Nhập Gmail Tùy Ý Khác:
+              {/* Ô nhập Google Client ID */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 block">
+                  Google Client ID Của Bạn *
                 </label>
-                <div className="space-y-2">
-                  <input
-                    type="email"
-                    value={googleEmailInput}
-                    onChange={(e) => setGoogleEmailInput(e.target.value)}
-                    placeholder="vidu@gmail.com"
-                    className="w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/[0.03] p-2.5 text-xs text-[#1A1A1A] dark:text-white focus:outline-none focus:border-[#F95716]"
-                  />
-                  <input
-                    type="text"
-                    value={googleNameInput}
-                    onChange={(e) => setGoogleNameInput(e.target.value)}
-                    placeholder="Họ và tên của bạn"
-                    className="w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/[0.03] p-2.5 text-xs text-[#1A1A1A] dark:text-white focus:outline-none focus:border-[#F95716]"
-                  />
-                </div>
-                <div className="flex items-center justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-400 hover:text-neutral-600 cursor-pointer"
-                  >
-                    Đóng
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!googleEmailInput.trim()}
-                    onClick={async () => {
-                      setShowGoogleModal(false);
-                      await handleGoogleSignIn({ email: googleEmailInput, name: googleNameInput });
-                    }}
-                    className="px-5 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 cursor-pointer disabled:opacity-40"
-                  >
-                    Xác Nhận & Đăng Nhập
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={googleClientIdInput}
+                  onChange={(e) => setGoogleClientIdInput(e.target.value)}
+                  placeholder="Ví dụ: 123456789-abcdef.apps.googleusercontent.com"
+                  className="w-full rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-white/[0.03] p-3 text-xs font-mono text-[#1A1A1A] dark:text-white focus:outline-none focus:border-[#F95716]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-200 dark:border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleConfigModal(false)}
+                  className="px-4 py-2.5 rounded-2xl text-xs font-bold text-neutral-500 hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  disabled={!googleClientIdInput.trim()}
+                  onClick={() => {
+                    const cleanId = googleClientIdInput.trim();
+                    localStorage.setItem('smartchain_google_client_id', cleanId);
+                    setShowGoogleConfigModal(false);
+                    // Lập tức kích hoạt mở cửa sổ Google thật
+                    setTimeout(() => triggerRealGoogleSignIn(cleanId), 200);
+                  }}
+                  className="px-6 py-2.5 rounded-2xl bg-[#F95716] text-white text-xs font-black shadow-md hover:brightness-105 cursor-pointer disabled:opacity-40"
+                >
+                  Lưu Client ID & Mở Đăng Nhập Google Thật
+                </button>
               </div>
             </div>
           </div>

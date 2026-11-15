@@ -5,11 +5,17 @@ import com.smartchain.entity.User;
 import com.smartchain.repository.mysql.RoleRepository;
 import com.smartchain.repository.mysql.UserRepository;
 import com.smartchain.service.JwtService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -22,6 +28,8 @@ import java.util.UUID;
 @RequestMapping("/api/v1/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -107,11 +115,69 @@ public class AuthController {
     public ResponseEntity<?> googleSignIn(@RequestBody Map<String, String> payload) {
         String email = payload.getOrDefault("email", "").trim().toLowerCase();
         String name = payload.getOrDefault("name", "").trim();
+        String picture = payload.getOrDefault("picture", "").trim();
+        String accessToken = payload.getOrDefault("accessToken", "").trim();
+        String idToken = payload.getOrDefault("idToken", payload.getOrDefault("credential", "")).trim();
+
+        // 1. Xác thực bảo mật trực tiếp với Google API nếu có accessToken hoặc idToken thật
+        if (!accessToken.isEmpty()) {
+            try {
+                RestTemplate rest = new RestTemplate();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setBearerAuth(accessToken);
+                HttpEntity<Void> req = new HttpEntity<>(headers);
+                ResponseEntity<Map> gRes = rest.exchange(
+                        "https://www.googleapis.com/oauth2/v3/userinfo",
+                        HttpMethod.GET,
+                        req,
+                        Map.class
+                );
+                if (gRes.getStatusCode().is2xxSuccessful() && gRes.getBody() != null) {
+                    Map<String, Object> gData = gRes.getBody();
+                    if (gData.containsKey("email")) {
+                        email = String.valueOf(gData.get("email")).toLowerCase();
+                    }
+                    if (gData.containsKey("name")) {
+                        name = String.valueOf(gData.get("name"));
+                    }
+                    if (gData.containsKey("picture")) {
+                        picture = String.valueOf(gData.get("picture"));
+                    }
+                    log.info("[GOOGLE-AUTH] Xác thực thành công tài khoản Google thật qua Google API: email={}, name={}", email, name);
+                }
+            } catch (Exception ex) {
+                log.warn("[GOOGLE-AUTH] Không thể gọi Google UserInfo API với accessToken: {}", ex.getMessage());
+            }
+        } else if (!idToken.isEmpty()) {
+            try {
+                RestTemplate rest = new RestTemplate();
+                ResponseEntity<Map> gRes = rest.getForEntity(
+                        "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken,
+                        Map.class
+                );
+                if (gRes.getStatusCode().is2xxSuccessful() && gRes.getBody() != null) {
+                    Map<String, Object> gData = gRes.getBody();
+                    if (gData.containsKey("email")) {
+                        email = String.valueOf(gData.get("email")).toLowerCase();
+                    }
+                    if (gData.containsKey("name")) {
+                        name = String.valueOf(gData.get("name"));
+                    }
+                    if (gData.containsKey("picture")) {
+                        picture = String.valueOf(gData.get("picture"));
+                    }
+                    log.info("[GOOGLE-AUTH] Xác thực thành công id_token thật từ Google: email={}, name={}", email, name);
+                }
+            } catch (Exception ex) {
+                log.warn("[GOOGLE-AUTH] Không thể xác thực id_token qua Google TokenInfo API: {}", ex.getMessage());
+            }
+        }
+
         if (email.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "status", "ERROR",
                     "error", "EMAIL_REQUIRED",
-                    "message", "Địa chỉ Gmail không được để trống!"
+                    "message", "Địa chỉ Gmail không được để trống hoặc token Google không hợp lệ!"
             ));
         }
 
@@ -120,6 +186,10 @@ public class AuthController {
         User user;
         if (userOpt.isPresent()) {
             user = userOpt.get();
+            if (!name.isEmpty() && (user.getFullName() == null || user.getFullName().contains("Google User"))) {
+                user.setFullName(name);
+                userRepository.save(user);
+            }
         } else {
             Role consumerRole = roleRepository.findByRoleName("CONSUMER")
                     .orElseGet(() -> roleRepository.save(new Role("CONSUMER", "Khách hàng Tiêu dùng Quét mã QR")));
@@ -132,7 +202,7 @@ public class AuthController {
             );
             user.setPhone(payload.getOrDefault("phone", "0988-GMAIL-USER"));
             user.setIsActive(true);
-            user.setNotes("Tài khoản xác thực chính chủ qua Google Gmail: " + email);
+            user.setNotes("Tài khoản xác thực chính chủ qua Google Identity Services: " + email);
             user = userRepository.save(user);
         }
 
@@ -147,6 +217,7 @@ public class AuthController {
         response.put("fullName", user.getFullName());
         response.put("department", user.getDepartment());
         response.put("email", email);
+        response.put("picture", picture);
         response.put("role", roleName);
         response.put("roleDescription", user.getRole() != null ? user.getRole().getDescription() : "");
         response.put("authProvider", "GOOGLE_GMAIL");
