@@ -46,12 +46,15 @@ export default function BatchesPage({
   const CARD =
     'rounded-[28px] border border-orange-950/5 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:border-orange-500/10 dark:bg-[#1C140F]';
 
-  // State phục vụ cấu hình IP quét điện thoại thật qua mạng Wi-Fi
   const [lanIp, setLanIp] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smartchain_custom_host');
+      if (saved) return saved;
+    } catch (e) {}
     if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost') {
-      return window.location.hostname;
+      return window.location.origin;
     }
-    return '192.168.1.17';
+    return 'https://examine-ensures-supporting-tennessee.trycloudflare.com';
   });
   const [activeQrModal, setActiveQrModal] = useState(null); // { code, title, status, isBatch }
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -1213,8 +1216,12 @@ export default function BatchesPage({
               <input
                 type="text"
                 value={lanIp}
-                onChange={(e) => setLanIp(e.target.value.trim())}
-                placeholder="192.168.1.17 hoặc https://trace.tenmien.vn"
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  setLanIp(val);
+                  try { localStorage.setItem('smartchain_custom_host', val); } catch (err) {}
+                }}
+                placeholder="https://...trycloudflare.com hoặc 192.168.1.17"
                 className="w-full rounded-xl border border-orange-950/10 dark:border-orange-500/20 bg-orange-950/[0.02] dark:bg-white/[0.02] px-3 py-1.5 font-mono text-xs font-bold text-[#F95716] focus:outline-none focus:border-[#F95716]"
               />
               <div className="text-[10.5px] text-neutral-400 leading-tight">

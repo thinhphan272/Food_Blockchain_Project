@@ -38,7 +38,9 @@ docker/data/
 *.dump
 *.csv.tmp
 
-# 6. IDE & Công cụ chỉnh sửa (VSCode, IntelliJ, Eclipse, OS)
+# 7. Công cụ nội bộ tải về
+tools/
+*.exe
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
