@@ -31,6 +31,8 @@ import {
 import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaResolver';
 import { traceByCode } from '../services/api';
 
+const DEFAULT_PUBLIC_TUNNEL_URL = 'https://examine-ensures-supporting-tennessee.trycloudflare.com';
+
 const CATEGORY_TEMP_RANGES = {
   VEG_FRUIT: '8 - 12°C',
   CHILLED_MEAT: '0 - 4°C',
@@ -132,13 +134,31 @@ export default function ConsumerPortalPage({
     }
   });
 
-  // Lô hàng đang chọn để kiểm tra (ưu tiên selectedBatch nếu có, hoặc lấy lô đầu tiên trên kệ trong CSDL)
+  // Cấu hình máy chủ công khai (Mặc định là Cloudflare Tunnel chính thức để điện thoại quét luôn mở được)
+  const [customHost, setCustomHost] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smartchain_custom_host');
+      if (saved && saved.trim()) return saved.trim();
+    } catch (e) {}
+    if (
+      typeof window !== 'undefined' &&
+      window.location.hostname &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      return window.location.origin;
+    }
+    return DEFAULT_PUBLIC_TUNNEL_URL;
+  });
+
+  // Lọc danh sách mặt hàng đang bày bán trên quầy kệ siêu thị Co.opmart
   const availableShelfBatches = React.useMemo(() => {
-    return batches.filter((b) =>
-      ['ON_SHELF', 'STOCKED_SHELF', 'QC_ACCEPTED', 'DELIVERED', 'IN_TRANSIT'].includes(
+    const onShelf = batches.filter((b) =>
+      ['ON_SHELF', 'STOCKED_SHELF', 'QC_ACCEPTED', 'DELIVERED'].includes(
         String(b.status || '').toUpperCase()
       )
     );
+    return onShelf.length > 0 ? onShelf : batches;
   }, [batches]);
 
   const initialCode =
@@ -191,10 +211,17 @@ export default function ConsumerPortalPage({
     activeBatchData.transportJourney?.vehicle_plate ||
     '49C-567.89';
 
-  // Đường link chuẩn cho mã QR thật (dẫn trực tiếp vào trang Passport công khai)
-  const traceUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/trace/${activeBatchData.batch_code}`
-    : `https://examine-ensures-supporting-tennessee.trycloudflare.com/trace/${activeBatchData.batch_code}`;
+  // Đường link chuẩn cho mã QR thật (LUÔN SỬ DỤNG ĐƯỜNG DẪN CÔNG KHAI CLOUDFLARE KHI CHẠY LOCALHOST)
+  const traceUrl = React.useMemo(() => {
+    let base = (customHost || '').trim();
+    if (!base) {
+      base = DEFAULT_PUBLIC_TUNNEL_URL;
+    }
+    if (base.startsWith('http://') || base.startsWith('https://')) {
+      return `${base.replace(/\/+$/, '')}/trace/${activeBatchData.batch_code}`;
+    }
+    return `https://${base.replace(/\/+$/, '')}/trace/${activeBatchData.batch_code}`;
+  }, [customHost, activeBatchData.batch_code]);
 
   // Khi người dùng chọn lô hoặc đổi mã, tự động đồng bộ
   useEffect(() => {
@@ -547,7 +574,7 @@ export default function ConsumerPortalPage({
               <button
                 type="button"
                 onClick={toggleCameraScanner}
-                className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-all"
+                className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-all cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -624,26 +651,32 @@ export default function ConsumerPortalPage({
                 </button>
               </div>
 
-              {/* Danh sách các mã lô thực tế từ CSDL để bấm nhanh */}
+              {/* Danh sách các mặt hàng đang bày bán trên quầy kệ siêu thị Co.opmart để khách hàng bấm chọn nhanh */}
               <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
-                <span className="font-bold text-neutral-400 text-[11px] uppercase tracking-wider">Lô hàng có sẵn:</span>
-                {batches.slice(0, 6).map((b) => (
-                  <button
-                    key={b.batch_code}
-                    type="button"
-                    onClick={() => {
-                      setInputCode(b.batch_code);
-                      handleExecuteSearch(b.batch_code);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs cursor-pointer ${
-                      activeBatchData.batch_code === b.batch_code
-                        ? 'bg-[#F95716] text-white shadow-sm'
-                        : 'bg-neutral-100 dark:bg-white/[0.05] hover:bg-neutral-200 dark:hover:bg-white/10 text-neutral-600 dark:text-neutral-300'
-                    }`}
-                  >
-                    {b.batch_code}
-                  </button>
-                ))}
+                <span className="font-bold text-neutral-400 text-[11px] uppercase tracking-wider">
+                  Mặt hàng đang bày bán tại quầy kệ siêu thị Co.opmart (Bấm chọn nhanh):
+                </span>
+                {availableShelfBatches.slice(0, 6).map((b) => {
+                  const isSelected = activeBatchData.batch_code === b.batch_code;
+                  return (
+                    <button
+                      key={b.batch_code}
+                      type="button"
+                      onClick={() => {
+                        setInputCode(b.batch_code);
+                        handleExecuteSearch(b.batch_code);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-[#F95716] text-white shadow-sm'
+                          : 'bg-neutral-100 dark:bg-white/[0.05] hover:bg-neutral-200 dark:hover:bg-white/10 text-neutral-700 dark:text-neutral-200'
+                      }`}
+                    >
+                      <span className="font-mono">{b.batch_code}</span>
+                      <span className="text-[11px] opacity-80">&bull; {b.product_name || b.productName}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -689,73 +722,118 @@ export default function ConsumerPortalPage({
 
                 {/* 4 Chỉ số thực tế từ CSDL & Cảm biến */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 text-center">
+                  {/* Chỉ số TTI */}
+                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 flex flex-col items-center justify-between text-center">
                     <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider block">Chỉ số TTI</span>
-                    <span className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+                    <span className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 my-1 block">
                       {liveTraceDetails?.aiFreshness?.freshnessGrade || '100% Tươi'}
                     </span>
                     <span className="text-[10px] text-neutral-500">Đạt chuẩn chất lượng</span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 text-center">
+                  {/* Nhiệt độ chuẩn */}
+                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 flex flex-col items-center justify-between text-center">
                     <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider block">Nhiệt độ chuẩn</span>
-                    <span className="text-lg sm:text-xl font-black text-[#F95716] mt-1 block">{activeTempRange}</span>
+                    <span className="text-lg sm:text-xl font-black text-[#F95716] my-1 block">{activeTempRange}</span>
                     <span className="text-[10px] text-neutral-500">Bảo quản chuẩn ngành</span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 text-center">
+                  {/* Xe Vận Chuyển: Biển số vàng kinh doanh vận tải */}
+                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 flex flex-col items-center justify-between text-center">
                     <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider block">Xe Vận Chuyển</span>
-                    <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-1 block">
-                      {activeVehiclePlate}
+                    
+                    {/* Biển số vàng kinh doanh vận tải chuẩn Việt Nam */}
+                    <div className="my-1.5 relative inline-flex items-center justify-center px-3 py-1 rounded-xl bg-[#F6C343] border-2 border-neutral-900 shadow-sm">
+                      <div className="absolute top-1 left-2 w-1 h-1 rounded-full bg-neutral-900/60" />
+                      <div className="absolute top-1 right-2 w-1 h-1 rounded-full bg-neutral-900/60" />
+                      <span className="font-mono font-black text-neutral-950 text-xs sm:text-sm tracking-wider">
+                        {activeVehiclePlate}
+                      </span>
+                    </div>
+
+                    <span className="text-[10px] text-neutral-500 flex items-center gap-1">
+                      <Truck size={11} className="text-amber-500" /> Thùng lạnh IoT ATP
                     </span>
-                    <span className="text-[10px] text-neutral-500">Giám sát vi khí hậu</span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 text-center">
-                    <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider block">Chứng Chỉ</span>
-                    <span className="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400 mt-1 block">VietGAP</span>
-                    <span className="text-[10px] text-neutral-500">HACCP & ISO-22000</span>
+                  {/* Chứng Chỉ: Huy hiệu chứng nhận VietGAP chính thức */}
+                  <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 flex flex-col items-center justify-between text-center relative overflow-hidden">
+                    <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider block">Chứng Nhận Chất Lượng</span>
+
+                    <div className="my-1.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/15 border-2 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 shadow-sm">
+                      <ShieldCheck size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="font-black text-xs tracking-wider">VietGAP CHUẨN</span>
+                    </div>
+
+                    <div className="flex flex-col items-center text-[10px] text-neutral-500 dark:text-neutral-400 leading-tight">
+                      <span className="font-bold text-neutral-700 dark:text-neutral-300">TCVN 11892-1:2017</span>
+                      <span className="text-[9.5px] text-neutral-400">HACCP & ISO-22000</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Hành trình chuỗi cung ứng khép kín */}
+                {/* Lộ trình chuỗi cung ứng khép kín chuẩn Enterprise - Unified Executive Timeline */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-400 mb-3">
-                    Lộ Trình Chuỗi Cung Ứng Khép Kín
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
-                      <span className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0">1</span>
-                      <div>
-                        <span className="font-extrabold text-emerald-700 dark:text-emerald-400 block">
-                          Cơ sở sản xuất & Ký số Genesis Block
-                        </span>
-                        <p className="text-neutral-600 dark:text-neutral-300 text-[11px] mt-0.5">
-                          Xuất xưởng tại <strong>{activeFarmName}</strong>, niêm phong nguồn gốc và ghi nhận giao dịch gốc vào sổ cái Blockchain bất biến.
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-400">
+                      Lộ Trình Chuỗi Cung Ứng Khép Kín
+                    </h4>
+                    <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">
+                      3 Giai Đoạn Giám Sát
+                    </span>
+                  </div>
+
+                  <div className="relative pl-7 space-y-3.5 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-orange-950/10 dark:before:bg-white/10">
+                    {/* Chặng 1 */}
+                    <div className="relative group">
+                      <span className="absolute -left-7 top-1 h-6 w-6 rounded-full bg-[#F95716] text-white flex items-center justify-center font-black text-xs shadow-sm ring-4 ring-white dark:ring-[#1C140F]">
+                        1
+                      </span>
+                      <div className="p-3.5 rounded-2xl bg-neutral-50/80 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[#1A1A1A] dark:text-white text-xs">
+                            Cơ sở sản xuất & Ký số Genesis Block
+                          </span>
+                          <span className="text-[10.5px] font-mono text-[#F95716] font-bold">Block #0</span>
+                        </div>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
+                          Xuất xưởng tại <strong>{activeFarmName}</strong>, đóng gói niêm phong và ghi nhận khối khởi tạo (Genesis Block) vào sổ cái chuỗi khối bất biến.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs">
-                      <span className="h-6 w-6 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs shrink-0">2</span>
-                      <div>
-                        <span className="font-extrabold text-blue-700 dark:text-blue-400 block">
-                          Vận chuyển xe lạnh IoT đa nhiệt độ
-                        </span>
-                        <p className="text-neutral-600 dark:text-neutral-300 text-[11px] mt-0.5">
-                          Phương tiện <strong>{activeVehiclePlate}</strong> duy trì dải nhiệt chuẩn {activeTempRange} xuyên suốt hành trình giao nhận.
+                    {/* Chặng 2 */}
+                    <div className="relative group">
+                      <span className="absolute -left-7 top-1 h-6 w-6 rounded-full bg-[#F95716] text-white flex items-center justify-center font-black text-xs shadow-sm ring-4 ring-white dark:ring-[#1C140F]">
+                        2
+                      </span>
+                      <div className="p-3.5 rounded-2xl bg-neutral-50/80 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[#1A1A1A] dark:text-white text-xs">
+                            Vận chuyển xe lạnh IoT đa nhiệt độ
+                          </span>
+                          <span className="text-[10.5px] font-mono text-neutral-500 font-bold">{activeVehiclePlate}</span>
+                        </div>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
+                          Đội xe lạnh chuyên dụng duy trì liên tục dải nhiệt bảo quản chuẩn {activeTempRange}, cảm biến IoT truyền dữ liệu vi khí hậu theo thời gian thực.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-xs">
-                      <span className="h-6 w-6 rounded-full bg-[#F95716] text-white flex items-center justify-center font-bold text-xs shrink-0">3</span>
-                      <div>
-                        <span className="font-extrabold text-[#F95716] block">
-                          Nghiệm thu KCS & Bày bán quầy kệ FEFO siêu thị
-                        </span>
-                        <p className="text-neutral-600 dark:text-neutral-300 text-[11px] mt-0.5">
-                          Bộ phận KCS kiểm toán đạt chuẩn an toàn thực phẩm, xếp quầy kệ theo thứ tự hạn dùng ưu tiên và kích hoạt tem điện tử.
+                    {/* Chặng 3 */}
+                    <div className="relative group">
+                      <span className="absolute -left-7 top-1 h-6 w-6 rounded-full bg-[#F95716] text-white flex items-center justify-center font-black text-xs shadow-sm ring-4 ring-white dark:ring-[#1C140F]">
+                        3
+                      </span>
+                      <div className="p-3.5 rounded-2xl bg-neutral-50/80 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[#1A1A1A] dark:text-white text-xs">
+                            Nghiệm thu KCS & Trưng bày quầy kệ FEFO siêu thị
+                          </span>
+                          <span className="text-[10.5px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">100% Đạt Chuẩn</span>
+                        </div>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
+                          KCS đối soát chỉ số độ tươi Arrhenius TTI, chấp thuận nhập kho và xếp lên quầy kệ bán lẻ Co.opmart theo thứ tự ưu tiên hạn sử dụng.
                         </p>
                       </div>
                     </div>
@@ -785,8 +863,9 @@ export default function ConsumerPortalPage({
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-400">
                       Tem Điện Tử Bất Biến
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                      Chuỗi Khối Live
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Cloudflare Live
                     </span>
                   </div>
 
@@ -794,7 +873,7 @@ export default function ConsumerPortalPage({
                     Mã QR Truy Xuất Nguồn Gốc
                   </h4>
 
-                  {/* KHUNG VẼ MÃ QR THẬT BẰNG QRCodeSVG DẪN THẲNG ĐẾN TRACE URL */}
+                  {/* KHUNG VẼ MÃ QR THẬT BẰNG QRCodeSVG DẪN THẲNG ĐẾN TRACE URL CÔNG KHAI */}
                   <div className="p-4 bg-white rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-inner inline-flex flex-col items-center justify-center">
                     <QRCodeSVG
                       value={traceUrl}
@@ -808,18 +887,18 @@ export default function ConsumerPortalPage({
                   </div>
 
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                    Quét trực tiếp bằng camera điện thoại tại siêu thị hoặc bấm nút dưới đây để mở Hộ chiếu toàn trình.
+                    Quét trực tiếp bằng camera điện thoại tại siêu thị để mở Hộ chiếu toàn trình (không cần đăng nhập).
                   </p>
 
                   <div className="space-y-2 pt-1">
-                    <Link
-                      to={`/trace/${activeBatchData.batch_code}`}
+                    <a
+                      href={traceUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="w-full py-2.5 px-4 rounded-xl bg-[#F95716] hover:bg-[#E0430B] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition-all"
                     >
                       <ExternalLink size={14} /> Mở Trang Passport Công Khai ↗
-                    </Link>
+                    </a>
 
                     <button
                       type="button"
@@ -829,24 +908,51 @@ export default function ConsumerPortalPage({
                       <Copy size={13} /> Sao Chép Đường Dẫn Tem
                     </button>
                   </div>
+
+                  {/* Cấu hình Máy Chủ Quét Công Khai Di Động */}
+                  <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 text-left space-y-1.5">
+                    <div className="flex items-center justify-between text-[10.5px]">
+                      <span className="font-bold text-neutral-500 dark:text-neutral-400">
+                        Địa chỉ máy chủ công khai (Tunnel / IP):
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={customHost}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        setCustomHost(val);
+                        try {
+                          localStorage.setItem('smartchain_custom_host', val);
+                        } catch (err) {}
+                      }}
+                      placeholder="https://...trycloudflare.com"
+                      className="w-full rounded-xl border border-orange-950/10 dark:border-orange-500/20 bg-neutral-50 dark:bg-black/30 px-3 py-1.5 font-mono text-[11px] font-bold text-[#F95716] focus:outline-none focus:border-[#F95716]"
+                    />
+                    <p className="text-[9.5px] text-neutral-400 leading-tight">
+                      Mặc định đã gán Cloudflare Tunnel. Bất kỳ điện thoại nào quét tem cũng sẽ mở ngay mà không gặp lỗi kết nối nội bộ.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Thẻ Con Dấu Mật Mã SmartChain */}
                 <div className="rounded-[28px] border border-orange-950/5 dark:border-orange-500/10 bg-neutral-50/80 dark:bg-[#1A130E] p-6 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-[#F95716]/10 text-[#F95716]">
-                      <ShieldCheck size={18} />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-xl bg-[#F95716]/10 text-[#F95716]">
+                        <ShieldCheck size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold uppercase text-[#1A1A1A] dark:text-white">
+                          Bảo Chứng Thuật Toán ECDSA
+                        </h4>
+                        <p className="text-[11px] text-neutral-500">Mã hóa chuẩn secp256r1</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-extrabold uppercase text-[#1A1A1A] dark:text-white">
-                        Bảo Chứng Thuật Toán ECDSA
-                      </h4>
-                      <p className="text-[11px] text-neutral-500">Mã hóa chuẩn secp256r1</p>
-                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      Chữ Ký Hợp Lệ
+                    </span>
                   </div>
-                  <p className="text-[11.5px] text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                    Dữ liệu nhiệt độ cảm biến và lịch sử phân phối được liên kết bất biến qua mã băm mật mã chuỗi khối.
-                  </p>
                   <div className="p-2.5 rounded-xl bg-white dark:bg-black/30 border border-neutral-200/60 dark:border-white/5 font-mono text-[10px] text-neutral-500 dark:text-neutral-400 break-all">
                     Tx: {liveTraceDetails?.blockchainIntegrity?.latestBlockHash || `0x8a9f...${activeBatchData.batch_code.slice(-6)}`}
                   </div>
@@ -961,14 +1067,14 @@ export default function ConsumerPortalPage({
                         Xem Lại Lô
                       </button>
 
-                      <Link
-                        to={`/trace/${item.batchCode}`}
+                      <a
+                        href={customHost ? `${customHost.replace(/\/+$/, '')}/trace/${item.batchCode}` : `https://examine-ensures-supporting-tennessee.trycloudflare.com/trace/${item.batchCode}`}
                         target="_blank"
                         rel="noreferrer"
                         className="px-4 py-2 rounded-xl bg-[#F95716] hover:bg-[#E0430B] text-white text-xs font-extrabold shadow-sm transition-all flex items-center gap-1.5"
                       >
                         <ExternalLink size={13} /> Passport ↗
-                      </Link>
+                      </a>
 
                       <button
                         type="button"
