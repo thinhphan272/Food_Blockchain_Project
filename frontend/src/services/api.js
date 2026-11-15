@@ -3,18 +3,19 @@ import axios from 'axios';
 const resolveDefaultApiBase = () => {
   if (typeof window !== 'undefined' && window.location) {
     const { hostname, origin } = window.location;
-    // Neu truy cap qua ten mien Internet / Tunnel (nhu *.loca.lt, *.ngrok.app, *.trycloudflare.com, *.vercel.app)
+    // 1. Khi truy cap qua Cloudflare Tunnel, Ngrok, Localtunnel hoac Public Domain
     if (hostname && hostname !== 'localhost' && !/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
       return `${origin}/api/v1`;
     }
-    if (hostname && hostname !== 'localhost') {
+    // 2. Khi truy cap qua mang Wi-Fi / IP LAN (vi du: 192.168.1.17 hoac 172.20.10.x)
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
       return `http://${hostname}:8080/api/v1`;
     }
   }
-  return 'http://localhost:8080/api/v1';
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBase();
+const API_BASE_URL = resolveDefaultApiBase();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -25,6 +26,8 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  // Dam bao tren dien thoai URL luon dong bo theo domain hien tai
+  config.baseURL = resolveDefaultApiBase();
   const token = localStorage.getItem('smartchain_jwt_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
