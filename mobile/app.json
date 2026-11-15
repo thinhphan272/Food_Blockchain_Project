@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "SmartChain IoT & QR Mobile",
+    "slug": "smartchain-expo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cho phép SmartChain quét mã QR Lô hàng (Batch QR) và Sản phẩm (Item QR)"
+      }
+    },
+    "android": {
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép SmartChain sử dụng Camera để quét mã QR truy xuất nguồn gốc thực phẩm."
+        }
+      ]
+    ]
+  }
+}
+
