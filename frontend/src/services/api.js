@@ -52,8 +52,14 @@ export const registerUser = async (payload) => {
   return res.data;
 };
 
-export const googleSignInApi = async (email, name = '', phone = '') => {
-  const res = await apiClient.post('/auth/google', { email, name, phone });
+export const googleSignInApi = async (param1, param2 = '', param3 = '') => {
+  let body = {};
+  if (typeof param1 === 'object' && param1 !== null) {
+    body = param1;
+  } else {
+    body = { email: param1, name: param2, phone: param3 };
+  }
+  const res = await apiClient.post('/auth/google', body);
   if (res.data?.token) {
     localStorage.setItem('smartchain_jwt_token', res.data.token);
   }

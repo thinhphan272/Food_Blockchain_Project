@@ -785,23 +785,21 @@ function MainDashboardLayout() {
     setAuthLoading(true);
     setAuthError('');
     try {
-      const email = (googlePayload.email || 'thinhphan272@gmail.com').trim().toLowerCase();
-      const name = (googlePayload.name || 'Phan Sĩ Thịnh').trim();
-      const phone = googlePayload.phone || '0988-GMAIL-USER';
-
-      const res = await googleSignInApi(email, name, phone);
+      const res = await googleSignInApi(googlePayload);
       if (res && res.token) {
         setJwtToken(res.token);
         localStorage.setItem('smartchain_jwt_token', res.token);
 
+        const email = res.email || googlePayload.email || '';
         const usr = {
           userId: res.userId,
           username: res.username || email.split('@')[0],
-          fullName: res.fullName || name || 'Khách Hàng Google',
+          fullName: res.fullName || googlePayload.name || 'Khách Hàng Google',
           role: 'CONSUMER',
           department: res.department || 'Public Consumer',
           phone: email,
-          assignedEntity: 'Xác thực Google Gmail',
+          picture: res.picture || googlePayload.picture || '',
+          assignedEntity: 'Xác thực Google Gmail Chính Chủ',
           authProvider: 'GOOGLE_GMAIL',
           createdAt: res.createdAt,
         };
