@@ -4,51 +4,63 @@ server:
 spring:
   application:
     name: smartchain-traceability-backend
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.cassandra.CassandraDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.cassandra.CassandraReactiveDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.cassandra.CassandraRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jReactiveDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jReactiveRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
 
-  # 1. MySQL JPA Cấu hình
+  # 1. MySQL JPA Cấu hình (Tự động fallback H2 In-Memory trong PolyglotDatabaseConfig nếu Docker tắt)
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:supermarket_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: ${MYSQL_USER:superuser}
-    password: ${MYSQL_PASSWORD:superpassword}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:supermarket_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:${MYSQL_USER:superuser}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${MYSQL_PASSWORD:superpassword}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
 
   # 2. MongoDB Cấu hình
   data:
     mongodb:
-      uri: mongodb://${MONGO_USER:mongoadmin}:${MONGO_PASSWORD:mongopassword}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:supermarket_mongo}?authSource=admin
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:supermarket_mongo}}
 
     # 3. Redis Cấu hình
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redispassword}
+      host: ${SPRING_REDIS_HOST:${SPRING_DATA_REDIS_HOST:${REDIS_HOST:localhost}}}
+      port: ${SPRING_REDIS_PORT:${SPRING_DATA_REDIS_PORT:${REDIS_PORT:6379}}}
+      password: ${SPRING_REDIS_PASSWORD:${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD:redispassword}}}
       timeout: 2000ms
 
     # 4. Cassandra Cấu hình
     cassandra:
-      contact-points: ${CASSANDRA_HOST:localhost}
-      port: ${CASSANDRA_PORT:9042}
-      keyspace-name: ${CASSANDRA_KEYSPACE:supermarket_telemetry_ks}
+      contact-points: ${SPRING_CASSANDRA_CONTACT_POINTS:${CASSANDRA_HOST:localhost}}
+      port: ${SPRING_CASSANDRA_PORT:${CASSANDRA_PORT:9042}}
+      keyspace-name: ${SPRING_CASSANDRA_KEYSPACE_NAME:${CASSANDRA_KEYSPACE:supermarket_telemetry_ks}}
       local-datacenter: datacenter1
       schema-action: create_if_not_exists
 
     # 5. Neo4j Cấu hình
     neo4j:
-      uri: bolt://${NEO4J_HOST:localhost}:${NEO4J_BOLT_PORT:7687}
+      uri: ${SPRING_NEO4J_URI:${NEO4J_URI:bolt://${NEO4J_HOST:localhost}:${NEO4J_BOLT_PORT:7687}}}
       authentication:
-        username: ${NEO4J_USER:neo4j}
-        password: ${NEO4J_PASSWORD:neo4jpassword}
+        username: ${SPRING_NEO4J_AUTHENTICATION_USERNAME:${NEO4J_USER:neo4j}}
+        password: ${SPRING_NEO4J_AUTHENTICATION_PASSWORD:${NEO4J_PASSWORD:neo4jpassword}}
 
-# Cấu hình MQTT Broker
+# Cấu hình MQTT Broker (Mặc định kết nối Public HiveMQ Broker đồng bộ với Wokwi ESP32)
 mqtt:
-  broker: tcp://${MQTT_HOST:localhost}:${MQTT_PORT:1883}
+  broker: ${MQTT_BROKER_URL:tcp://${MQTT_HOST:broker.hivemq.com}:${MQTT_PORT:1883}}
   clientId: smartchain-backend-service
   defaultTopic: smartchain/telemetry/#
 
