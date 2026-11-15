@@ -574,35 +574,22 @@ public class DataInitializerService implements CommandLineRunner {
             String finalStatus) {
         Optional<FoodBatchDocument> existingOpt = blockchainLedgerService.findBatchByCode(batchCode);
         List<BlockchainBlock> existingChain = blockchainLedgerService.getChainByBatch(batchCode);
-        boolean isDeliveredAndStocked = "ON_SHELF".equals(finalStatus) || "QC_ACCEPTED".equals(finalStatus) || "DELIVERED".equals(finalStatus);
 
-        // Kiểm tra tính nhất quán dữ liệu nghiệp vụ:
-        // - Lô đã bàn giao & lên kệ (ON_SHELF): phải có đủ >= 3 khối sổ cái (Genesis, IoT, Inbound QC)
-        // - Lô chưa vận chuyển (CREATED, ASSIGNED_PENDING, READY_FOR_PICKUP): CHỈ ĐƯỢC CÓ DUY NHẤT 1 KHỐI (Genesis #0)
-        boolean isConsistent = existingOpt.isPresent() && !existingChain.isEmpty()
-                && (isDeliveredAndStocked ? existingChain.size() >= 3 : existingChain.size() == 1);
-
-        if (isConsistent) {
+        // Bảo tồn nguyên vẹn 100% trạng thái người dùng/hệ thống đã thao tác:
+        // Lô hàng đã tồn tại trong CSDL sẽ giữ nguyên trạng thái, lịch sử tài xế, kết quả kiểm định KCS,
+        // vị trí quầy kệ, tem QR đã bán (SOLD_SEAL_VOID) và chuỗi khối Blockchain.
+        if (existingOpt.isPresent()) {
             FoodBatchDocument existing = existingOpt.get();
-            existing.setProductName(productName);
-            existing.setCategory(category);
-            existing.setFarmName(farmName);
-            existing.setStatus(finalStatus);
-            existing.getTransportJourney().put("vehicle_plate", vehiclePlate != null ? vehiclePlate : "");
-            existing.getTransportJourney().put("driver_name", driverName != null ? driverName : "");
-            if ("CREATED".equals(finalStatus) && (vehiclePlate == null || vehiclePlate.isEmpty())) {
-                existing.setStatus("CREATED");
-                existing.getTransportJourney().put("route", "Đang lưu kho ban đầu tại " + farmName);
-                existing.getQcInspection().clear();
-            } else if ("READY_FOR_PICKUP".equals(finalStatus) || "ASSIGNED_PENDING".equals(finalStatus)) {
-                existing.getQcInspection().clear();
+            log.info("[PERSISTENCE] Lô {} đã tồn tại trong CSDL với trạng thái [{}], bảo toàn nguyên vẹn thao tác và {} khối sổ cái Blockchain.",
+                    batchCode, existing.getStatus(), existingChain.size());
+            if (existing.getPackageCount() == null || existing.getPackageCount() == 0) {
+                applyPackagingProfile(existing, batchCode, category, price, weightKg);
+                blockchainLedgerService.saveFoodBatch(existing);
             }
-            applyPackagingProfile(existing, batchCode, category, price, weightKg);
-            blockchainLedgerService.saveFoodBatch(existing);
             return;
         }
 
-        // Tự động làm sạch và khởi tạo lại theo đúng chuẩn quy trình chuỗi cung ứng thực tế
+        // Chỉ khởi tạo mẫu khi lô hàng hoàn toàn chưa có trong CSDL
         seedBatchWithFullWorkflow(
                 batchCode, productName, category, farmName, vehiclePlate, driverName,
                 supermarkets, shelves, price, weightKg, dynamicAttrs, avgTemp, avgHum, gasType, avgGas, finalStatus

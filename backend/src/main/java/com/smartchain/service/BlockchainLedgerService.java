@@ -70,6 +70,19 @@ public class BlockchainLedgerService {
         b.setUnitCount(doc.getInteger("unit_count", 100));
         b.setUnitWeightKg(doc.get("unit_weight_kg") instanceof Number n ? n.doubleValue() : 0.5);
         b.setUnitPrice(doc.get("unit_price") instanceof Number n ? n.doubleValue() : 65000.0);
+        b.setPackageCount(doc.get("package_count") instanceof Number n ? n.intValue() : 50);
+        b.setWeightPerPackageKg(doc.get("weight_per_package_kg") instanceof Number n ? n.doubleValue() : 10.0);
+        b.setPackageUnit(doc.getString("package_unit") != null ? doc.getString("package_unit") : "Thùng carton tiêu chuẩn");
+        b.setUnitsPerPackage(doc.get("units_per_package") instanceof Number n ? n.intValue() : 20);
+        b.setTotalWeightKg(doc.get("total_weight_kg") instanceof Number n ? n.doubleValue() : 500.0);
+        if (doc.getString("harvest_date") != null) {
+            try {
+                b.setHarvestDate(Instant.parse(doc.getString("harvest_date")));
+            } catch (Exception ignored) {}
+        }
+        if (doc.get("certifications") instanceof List<?> certs) {
+            b.setCertifications(new ArrayList<>((List<Map<String, Object>>) certs));
+        }
         if (doc.get("standards") instanceof List<?> stds) {
             b.setStandards(stds.stream().map(String::valueOf).collect(Collectors.toList()));
         }
@@ -97,6 +110,16 @@ public class BlockchainLedgerService {
                     );
                     if (iDoc.get("scan_count") instanceof Number sc) {
                         s.setScanCount(sc.intValue());
+                    }
+                    if (iDoc.getString("sold_at") != null) {
+                        try {
+                            s.setSoldAt(Instant.parse(iDoc.getString("sold_at")));
+                        } catch (Exception ignored) {}
+                    }
+                    if (iDoc.getString("last_scanned_at") != null) {
+                        try {
+                            s.setLastScannedAt(Instant.parse(iDoc.getString("last_scanned_at")));
+                        } catch (Exception ignored) {}
                     }
                     b.getItemQrSerials().add(s);
                     qrSerialIndex.put(s.getSerialCode(), s);
@@ -208,12 +231,19 @@ public class BlockchainLedgerService {
         if (batch.getItemQrSerials() != null) {
             for (FoodBatchDocument.ItemQrSerial item : batch.getItemQrSerials()) {
                 qrSerialIndex.put(item.getSerialCode(), item);
-                itemDocs.add(new Document("serial_code", item.getSerialCode())
+                Document itemDoc = new Document("serial_code", item.getSerialCode())
                         .append("batch_code", item.getBatchCode())
                         .append("weight_kg", item.getWeightKg())
                         .append("price", item.getPrice())
                         .append("status", item.getStatus())
-                        .append("scan_count", item.getScanCount()));
+                        .append("scan_count", item.getScanCount());
+                if (item.getSoldAt() != null) {
+                    itemDoc.append("sold_at", item.getSoldAt().toString());
+                }
+                if (item.getLastScannedAt() != null) {
+                    itemDoc.append("last_scanned_at", item.getLastScannedAt().toString());
+                }
+                itemDocs.add(itemDoc);
             }
         }
 
@@ -231,6 +261,13 @@ public class BlockchainLedgerService {
                         .append("unit_count", batch.getUnitCount())
                         .append("unit_weight_kg", batch.getUnitWeightKg())
                         .append("unit_price", batch.getUnitPrice())
+                        .append("package_count", batch.getPackageCount())
+                        .append("weight_per_package_kg", batch.getWeightPerPackageKg())
+                        .append("package_unit", batch.getPackageUnit())
+                        .append("units_per_package", batch.getUnitsPerPackage())
+                        .append("total_weight_kg", batch.getTotalWeightKg())
+                        .append("harvest_date", batch.getHarvestDate() != null ? batch.getHarvestDate().toString() : null)
+                        .append("certifications", batch.getCertifications())
                         .append("standards", batch.getStandards())
                         .append("cultivation_details", batch.getCultivationDetails())
                         .append("dynamic_attributes", batch.getDynamicAttributes())
