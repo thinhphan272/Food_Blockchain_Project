@@ -62,19 +62,22 @@ export default function AuthPages({
   // Xác định cổng hiện tại
   const currentPortal = isPathAdmin ? 'admin' : isPathEnterprise ? 'enterprise' : isPathConsumer ? 'consumer' : 'gateway';
 
+  // Client ID chính thức đã đăng ký trên Google Cloud Console
+  const DEFAULT_GOOGLE_CLIENT_ID = '1071098222333-bhsipdrp2bv1421u51jk2tatt252221k.apps.googleusercontent.com';
+
   // State cấu hình & điều phối Google OAuth 2.0 Thật (Google Identity Services)
   const [showGoogleConfigModal, setShowGoogleConfigModal] = useState(false);
   const [googleClientIdInput, setGoogleClientIdInput] = useState(() => {
     return (
-      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
       localStorage.getItem('smartchain_google_client_id') ||
-      ''
+      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      DEFAULT_GOOGLE_CLIENT_ID
     );
   });
 
   // Kích hoạt cửa sổ đăng nhập Google chính thức (accounts.google.com)
   const triggerRealGoogleSignIn = (forcedClientId = null) => {
-    const clientId = (forcedClientId || googleClientIdInput || '').trim();
+    const clientId = (forcedClientId || googleClientIdInput || DEFAULT_GOOGLE_CLIENT_ID).trim();
 
     if (!clientId) {
       setShowGoogleConfigModal(true);
