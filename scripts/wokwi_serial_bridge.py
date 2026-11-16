@@ -12,6 +12,7 @@ import json
 import re
 import socket
 import threading
+import urllib.request
 import paho.mqtt.client as mqtt
 
 # Ensure unbuffered stdout
@@ -20,7 +21,7 @@ print = functools.partial(print, flush=True)
 
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-RFC2217_HOST = "localhost"
+RFC2217_HOST = "127.0.0.1"
 RFC2217_PORT = 4000
 CMD_TOPIC = "smartchain/device/ESP32-MULTI-01/cmd"
 
@@ -29,6 +30,47 @@ serial_lock = threading.Lock()
 last_profile_payload = None
 last_sent_payload = None
 last_sent_time = 0
+
+CATEGORY_PROFILES = {
+    "VEG_FRUIT": {"min_temp": 8.0, "max_temp": 12.0, "gas_type": "C2H4", "max_gas": 25.0},
+    "DEEP_FROZEN": {"min_temp": -22.0, "max_temp": -18.0, "gas_type": "NONE", "max_gas": 0.0},
+    "CHILLED_MEAT": {"min_temp": 0.0, "max_temp": 4.0, "gas_type": "NH3", "max_gas": 20.0},
+    "DAIRY": {"min_temp": 2.0, "max_temp": 6.0, "gas_type": "Lactic", "max_gas": 15.0},
+    "SEAFOOD": {"min_temp": -2.0, "max_temp": 2.0, "gas_type": "TMA", "max_gas": 10.0},
+    "DELI_HOT": {"min_temp": 60.0, "max_temp": 75.0, "gas_type": "NONE", "max_gas": 0.0},
+}
+
+def fetch_active_in_transit_profile():
+    try:
+        url = "http://127.0.0.1:8080/api/workflow/batches"
+        req = urllib.request.Request(url, headers={'User-Agent': 'WokwiBridge/1.0'})
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            if resp.status == 200:
+                batches = json.loads(resp.read().decode('utf-8'))
+                for b in batches:
+                    if b.get("status") == "IN_TRANSIT":
+                        b_code = b.get("batchCode") or b.get("batch_code")
+                        b_prod = b.get("productName") or b.get("product_name") or "Thuc pham"
+                        b_cat = (b.get("category") or b.get("category_code") or "VEG_FRUIT").upper()
+                        tj = b.get("transportJourney") or b.get("transport_journey") or {}
+                        plate = tj.get("vehicle_plate") or "49C-567.89"
+                        prof = CATEGORY_PROFILES.get(b_cat, CATEGORY_PROFILES["VEG_FRUIT"])
+                        payload = json.dumps({
+                            "command": "SET_PROFILE",
+                            "batch_code": b_code,
+                            "product_name": b_prod,
+                            "category": b_cat,
+                            "min_temp": prof["min_temp"],
+                            "max_temp": prof["max_temp"],
+                            "gas_type": prof["gas_type"],
+                            "max_gas": prof["max_gas"],
+                            "vehicle_id": plate,
+                            "device_id": "ESP32-MULTI-01"
+                        })
+                        return payload
+    except Exception:
+        pass
+    return None
 
 def on_mqtt_connect(client, userdata, flags, rc):
     print(f"[MQTT] Connected to {MQTT_BROKER}:{MQTT_PORT} (rc={rc})")
@@ -84,27 +126,39 @@ def run_bridge():
     print(f"============================================================")
 
     json_pattern = re.compile(r'\{.*"batch_code".*\}')
+    last_wait_log = 0
 
     while True:
         try:
-            print(f"[BRIDGE] Waiting for Wokwi simulation on {RFC2217_HOST}:{RFC2217_PORT}...")
+            now = time.time()
+            if now - last_wait_log > 6.0:
+                print(f"[BRIDGE] Waiting for Wokwi simulation on {RFC2217_HOST}:{RFC2217_PORT}... (Click Play button in diagram.json)")
+                last_wait_log = now
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2.0)
             s.connect((RFC2217_HOST, RFC2217_PORT))
+            s.settimeout(None)
             with serial_lock:
                 serial_sock = s
             print("[BRIDGE] Connected to Wokwi Serial Port (RFC2217)! Streaming live sensor data...")
 
-            # Nếu đã có cấu hình lô hàng từ Web, đẩy ngay xuống Wokwi khi vừa kết nối
+            # Nếu đã có cấu hình lô hàng từ Web hoặc Backend đang có lô IN_TRANSIT, đẩy ngay xuống Wokwi khi vừa kết nối
             def push_cached_profile():
+                global last_profile_payload
                 time.sleep(1.5)
-                if last_profile_payload:
+                payload_to_push = last_profile_payload
+                if not payload_to_push:
+                    payload_to_push = fetch_active_in_transit_profile()
+                    if payload_to_push:
+                        last_profile_payload = payload_to_push
+                if payload_to_push:
                     with serial_lock:
                         if serial_sock:
                             try:
-                                serial_sock.sendall((last_profile_payload + "\n").encode('utf-8'))
-                                print(f"[BRIDGE -> WOKWI] Auto-synced active batch profile to Wokwi!")
-                            except Exception:
-                                pass
+                                serial_sock.sendall((payload_to_push + "\n").encode('utf-8'))
+                                print(f"[BRIDGE -> WOKWI] Auto-synced active batch profile to Wokwi: {payload_to_push}")
+                            except Exception as e:
+                                print(f"[BRIDGE -> WOKWI ERR] {e}")
             threading.Thread(target=push_cached_profile, daemon=True).start()
 
             buffer = ""

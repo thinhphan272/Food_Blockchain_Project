@@ -32,7 +32,7 @@ import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaReso
 import { traceByCode } from '../services/api';
 
 const CURRENT_WIFI_LAN_IP = '172.17.74.89';
-const DEFAULT_PUBLIC_TUNNEL_URL = 'https://sons-peaceful-php-resolutions.trycloudflare.com';
+const DEFAULT_PUBLIC_TUNNEL_URL = 'https://canberra-university-sells-pixel.trycloudflare.com';
 
 const CATEGORY_TEMP_RANGES = {
   VEG_FRUIT: '8 - 12°C',
