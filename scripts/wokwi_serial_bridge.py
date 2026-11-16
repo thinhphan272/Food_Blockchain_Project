@@ -189,7 +189,7 @@ def run_bridge():
                     # Print firmware logs
                     if "[STANDBY]" in line:
                         print(f"[WOKWI STANDBY] {line}")
-                    elif "[Telemetry Sent]" in line or "batch_code" in line:
+                    elif "[Telemetry Sent]" in line or "[Offline Backfill]" in line or "batch_code" in line:
                         match = json_pattern.search(line)
                         if match:
                             raw_json = match.group(0)
@@ -202,12 +202,16 @@ def run_bridge():
                                 mqtt_client.publish(topic, raw_json, qos=1)
                                 temp = parsed.get("temperature", "?")
                                 gas = parsed.get("gas_value", "?")
+                                is_offline = parsed.get("buffered", False) or parsed.get("offline", False)
                                 breached = parsed.get("is_breached", False)
                                 status_str = "CANH BAO" if breached else "AN TOAN"
-                                print(f"[LIVE ESP32 -> WEB] Temp={temp}C | Gas={gas}ppm | Batch={batch} [{status_str}] -> Sent to HiveMQ!")
+                                if is_offline:
+                                    print(f"[OFFLINE BACKFILL -> HIVEMQ] Synced buffered record! Temp={temp}C | Gas={gas}ppm | Batch={batch} -> Pushed to Blockchain & Cassandra")
+                                else:
+                                    print(f"[LIVE ESP32 -> WEB] Temp={temp}C | Gas={gas}ppm | Batch={batch} [{status_str}] -> Sent to HiveMQ!")
                             except Exception as parse_err:
                                 print(f"[JSON PARSE WARN] {parse_err}: {raw_json}")
-                    elif "[ACTUATION]" in line or "[OLED]" in line or "Ket noi" in line or "[SYSTEM]" in line:
+                    elif "[OFFLINE" in line or "[ONLINE" in line or "[ACTUATION]" in line or "[OLED]" in line or "Ket noi" in line or "[SYSTEM]" in line:
                         print(f"[WOKWI LOG] {line}")
 
         except ConnectionRefusedError:

@@ -18,6 +18,8 @@ import {
   Lock,
   ChevronLeft,
   ChevronRight,
+  Wifi,
+  WifiOff,
 } from '../components/MomentumIcons';
 import {
   VietnamColdChainMap,
@@ -34,6 +36,7 @@ import {
   requestDoorOpen,
   approveDoorOpen,
   openTruckDoor,
+  sendRelayCommand,
 } from '../services/api';
 
 const DEFAULT_DRIVER_ROSTER = [
@@ -96,6 +99,29 @@ export default function ColdChainIotPage({
   // Bộ đếm ngược 20 giây giữ giao diện sau khi bàn giao lô hàng xong trước khi chuyển về "Chưa chọn lô hàng"
   const [postDeliveryCountdown, setPostDeliveryCountdown] = useState(null);
   const deliveredCountdownBatchRef = React.useRef(null);
+
+  // State mô phỏng mất kết nối mạng 4G/WiFi (Store-and-Forward Offline Buffering)
+  const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
+
+  const handleToggleOfflineMode = async () => {
+    const nextState = !isSimulatedOffline;
+    setIsSimulatedOffline(nextState);
+    const action = nextState ? 'SIMULATE_OFFLINE' : 'SIMULATE_ONLINE';
+    const reason = nextState ? 'Mô phỏng xe đi vào vùng mất sóng 4G/WiFi (Đèo/Hầm)' : 'Xe ra khỏi vùng mất sóng, khôi phục mạng';
+    try {
+      await sendRelayCommand('ESP32-MULTI-01', action, reason);
+      if (setSystemAlert) {
+        setSystemAlert({
+          type: nextState ? 'warning' : 'success',
+          message: nextState
+            ? '📡 ĐÃ KÍCH HOẠT CHẾ ĐỘ MẤT MẠNG 4G: Thiết bị IoT tự động chuyển sang lưu trữ cục bộ vào bộ đệm Flash (Store-and-Forward). Dàn lạnh rơ-le vẫn tiếp tục bảo vệ hàng tự động tại biên!'
+            : '⚡ ĐÃ KHÔI PHỤC KẾT NỐI 4G: Thiết bị IoT đang đồng bộ toàn bộ các bản ghi đệm lên HiveMQ, Cassandra và Blockchain!',
+        });
+      }
+    } catch (err) {
+      console.warn('Lỗi điều khiển chế độ mất mạng:', err.message);
+    }
+  };
 
   // Phân biệt vai trò: ADMIN (Giám sát & Điều phối) vs LOGISTICS_DRIVER (Tài xế vận chuyển)
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -1669,6 +1695,23 @@ export default function ColdChainIotPage({
               >
                 <Repeat size={13} className="text-[#F95716]" />
                 Nạp cấu hình OTA xuống ESP32
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleOfflineMode}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  isSimulatedOffline
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-md animate-pulse'
+                    : 'bg-orange-950/5 dark:bg-white/10 hover:bg-orange-950/10 text-[#1A1A1A] dark:text-[#F5F5F5]'
+                }`}
+                title={
+                  isSimulatedOffline
+                    ? 'Bấm để khôi phục kết nối 4G và đồng bộ các gói tin đã lưu trong bộ đệm Flash lên Blockchain'
+                    : 'Bấm để mô phỏng xe đi qua đèo/hầm mất kết nối Internet 4G (Kích hoạt Store-and-Forward)'
+                }
+              >
+                <WifiOff size={13} className={isSimulatedOffline ? 'text-white' : 'text-amber-500'} />
+                {isSimulatedOffline ? 'Khôi phục 4G & Đồng bộ đệm' : 'Mô phỏng Mất mạng 4G'}
               </button>
               <button
                 type="button"

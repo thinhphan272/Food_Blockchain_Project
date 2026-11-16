@@ -39,6 +39,27 @@ export const CalendarDays = (p) => (
   </Ic>
 );
 
+export const Wifi = (p) => (
+  <Ic {...p}>
+    <path d="M12 20h.01" />
+    <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+    <path d="M5 12.859a10 10 0 0 1 14 0" />
+    <path d="M1.42 9.28a15 15 0 0 1 21.16 0" />
+  </Ic>
+);
+
+export const WifiOff = (p) => (
+  <Ic {...p}>
+    <line x1="2" y1="2" x2="22" y2="22" />
+    <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+    <path d="M5 12.859a10 10 0 0 1 5.17-2.69" />
+    <path d="M19 12.859a10 10 0 0 0-2.01-1.63" />
+    <path d="M1.42 9.28a15 15 0 0 1 7.22-3.83" />
+    <path d="M22.58 9.28a15 15 0 0 0-9.08-4.22" />
+    <path d="M12 20h.01" />
+  </Ic>
+);
+
 export const Sun = (p) => (
   <Ic {...p}>
     <circle cx="12" cy="12" r="4.2" />
