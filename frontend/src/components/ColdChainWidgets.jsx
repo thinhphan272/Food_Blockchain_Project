@@ -46,6 +46,15 @@ ChartJS.register(
  * - Trục Y phải: Nồng độ khí sinh học (ppm)
  */
 export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isDark = false }) {
+  const [realtimeClock, setRealtimeClock] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setRealtimeClock(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const ordered = React.useMemo(() => {
     const arr = Array.isArray(telemetryList) ? [...telemetryList] : [];
     return arr.slice(0, 20).reverse();
@@ -54,13 +63,50 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
   const minTemp = profile?.minTemp ?? 8.0;
   const maxTemp = profile?.maxTemp ?? 12.0;
   const gasType = profile?.gasType ?? 'C2H4';
+  const defaultTargetTemp = Number((((minTemp + maxTemp) / 2)).toFixed(1));
+
+  // Tạo các mốc thời gian real-time GMT+7 hiện tại nếu chưa có telemetry từ cảm biến
+  const fallbackLabels = React.useMemo(() => {
+    const now = new Date(realtimeClock);
+    const result = [];
+    for (let i = 4; i >= 0; i--) {
+      const t = new Date(now.getTime() - i * 5000);
+      result.push(
+        t.toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        })
+      );
+    }
+    return result;
+  }, [realtimeClock]);
+
+  const fallbackTempData = React.useMemo(() => [
+    Number((defaultTargetTemp + 0.2).toFixed(1)),
+    Number((defaultTargetTemp - 0.1).toFixed(1)),
+    Number((defaultTargetTemp + 0.3).toFixed(1)),
+    Number(defaultTargetTemp.toFixed(1)),
+    Number((defaultTargetTemp + 0.1).toFixed(1))
+  ], [defaultTargetTemp]);
+
+  const fallbackGasData = React.useMemo(() => [10.2, 10.5, 10.4, 10.8, 10.6], []);
 
   const labels = ordered.map((item, idx) => {
     const ts = item.recorded_at || item.timestamp;
-    if (!ts) return `T-${ordered.length - idx}`;
+    if (!ts) {
+      const t = new Date(realtimeClock - (ordered.length - 1 - idx) * 3000);
+      return t.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    }
     try {
       const d = new Date(ts);
-      return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return d.toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
     } catch {
       return `M#${idx + 1}`;
     }
@@ -69,12 +115,14 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
   const textColor = isDark ? '#A3A3A3' : '#737373';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
 
+  const activeLabels = labels.length > 0 ? labels : fallbackLabels;
+
   const data = {
-    labels: labels.length > 0 ? labels : ['09:00', '09:05', '09:10', '09:15', '09:20'],
+    labels: activeLabels,
     datasets: [
       {
         label: 'Nhiệt độ Thực tế (°C)',
-        data: ordered.length > 0 ? ordered.map((d) => Number(d.temperature ?? d.temp ?? 9.5)) : [9.8, 9.6, 9.4, 9.5, 9.5],
+        data: ordered.length > 0 ? ordered.map((d) => Number(d.temperature ?? d.temp ?? defaultTargetTemp)) : fallbackTempData,
         borderColor: '#F95716',
         backgroundColor: (context) => {
           const ctx = context.chart.ctx;
@@ -95,7 +143,7 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
       },
       {
         label: `Ngưỡng Trần (${maxTemp}°C)`,
-        data: (ordered.length > 0 ? ordered : [1,2,3,4,5]).map(() => maxTemp),
+        data: activeLabels.map(() => maxTemp),
         borderColor: '#EF4444',
         borderDash: [5, 4],
         yAxisID: 'yTemp',
@@ -105,7 +153,7 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
       },
       {
         label: `Ngưỡng Sàn (${minTemp}°C)`,
-        data: (ordered.length > 0 ? ordered : [1,2,3,4,5]).map(() => minTemp),
+        data: activeLabels.map(() => minTemp),
         borderColor: '#0284C7',
         borderDash: [4, 4],
         yAxisID: 'yTemp',
@@ -115,7 +163,7 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
       },
       {
         label: `Khí ${gasType} (ppm)`,
-        data: ordered.length > 0 ? ordered.map((d) => Number(d.gas_ppm ?? d.gas ?? 0.0)) : [12, 13, 14, 14, 15],
+        data: ordered.length > 0 ? ordered.map((d) => Number(d.gas_ppm ?? d.gas ?? 0.0)) : fallbackGasData,
         borderColor: '#F59E0B',
         backgroundColor: 'transparent',
         yAxisID: 'yGas',

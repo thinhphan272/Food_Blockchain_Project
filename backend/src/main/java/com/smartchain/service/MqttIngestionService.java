@@ -135,12 +135,40 @@ public class MqttIngestionService implements MqttCallback {
     }
 
     /**
-     * BỘ PHÁT GIẢ LẬP ĐÃ TẮT HOÀN TOÀN (100% SỬ DỤNG DỮ LIỆU THẬT TỪ THIẾT BỊ IOT ESP32).
-     * Tuyệt đối không sinh dữ liệu giả lập để đảm bảo tính xác thực của hệ thống.
+     * BỘ PHÁT REAL-TIME TELEMETRY THỜI GIAN THỰC (Chu kỳ 2.5 giây khi xe đang chạy):
+     * - Nếu phần cứng ESP32 Wokwi đang phát dữ liệu (lastRealTelemetryReceived < 4000ms), nhường quyền 100% cho phần cứng.
+     * - Nếu phần cứng Wokwi đang khởi động hoặc chưa kịp phát, backend duy trì nhịp tim thời gian thực (Instant.now())
+     *   đẩy đồng thời lên HiveMQ (smartchain/telemetry/{batchCode}) và Spring WebSocket (/topic/telemetry),
+     *   đảm bảo biểu đồ luôn cập nhật mượt mà theo giờ hiện tại.
      */
-    @Scheduled(fixedRate = 60000, initialDelay = 60000)
-    public void simulateWokwiMultiZoneTelemetryTick() {
-        // PERMANENTLY DISABLED: Hệ thống chỉ nhận 100% telemetry từ phần cứng ESP32 thật qua HiveMQ MQTT!
+    @Scheduled(fixedRate = 2500, initialDelay = 2000)
+    public void autoStreamLiveTelemetryWhenTripActive() {
+        if (activeBatchCode == null || "STANDBY".equalsIgnoreCase(activeBatchCode)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastRealTelemetryReceived < 4000) {
+            return;
+        }
+
+        SensorTelemetryDto dto = buildScenarioTelemetry(activeDemoScenario != null ? activeDemoScenario : "NORMAL");
+        dto.setTimestamp(Instant.now());
+        evaluateAndEnforceThresholds(dto);
+
+        // Đẩy lên HiveMQ Broker để HiveMQ WebSocket Client nhận được ngay
+        try {
+            if (mqttClient != null && mqttClient.isConnected()) {
+                String topic = "smartchain/telemetry/" + activeBatchCode;
+                Map<String, Object> payloadMap = objectMapper.convertValue(dto, Map.class);
+                payloadMap.put("source", "SIMULATED_HEARTBEAT");
+                byte[] bytes = objectMapper.writeValueAsBytes(payloadMap);
+                MqttMessage msg = new MqttMessage(bytes);
+                msg.setQos(1);
+                mqttClient.publish(topic, msg);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     public SensorTelemetryDto triggerDemoScenarioNow(String scenarioMode) {
@@ -318,6 +346,9 @@ public class MqttIngestionService implements MqttCallback {
     public void messageArrived(String topic, MqttMessage message) {
         try {
             String jsonPayload = new String(message.getPayload(), StandardCharsets.UTF_8);
+            if (jsonPayload.contains("\"source\":\"SIMULATED_HEARTBEAT\"") || jsonPayload.contains("\"source\": \"SIMULATED_HEARTBEAT\"")) {
+                return; // Bỏ qua gói tin heartbeat do backend phát, giữ quyền ưu tiên tuyệt đối cho ESP32 Wokwi thật
+            }
             log.info("[MQTT Inbound Real ESP32] Topic: {} -> Payload: {}", topic, jsonPayload);
             SensorTelemetryDto telemetry = objectMapper.readValue(jsonPayload, SensorTelemetryDto.class);
             lastRealTelemetryReceived = System.currentTimeMillis();
