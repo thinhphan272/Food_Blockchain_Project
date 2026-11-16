@@ -31,7 +31,8 @@ import {
 import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaResolver';
 import { traceByCode } from '../services/api';
 
-const DEFAULT_PUBLIC_TUNNEL_URL = 'https://examine-ensures-supporting-tennessee.trycloudflare.com';
+const CURRENT_WIFI_LAN_IP = '172.17.74.89';
+const DEFAULT_PUBLIC_TUNNEL_URL = 'https://short-lessons-estimated-radar.trycloudflare.com';
 
 const CATEGORY_TEMP_RANGES = {
   VEG_FRUIT: '8 - 12°C',
@@ -909,13 +910,54 @@ export default function ConsumerPortalPage({
                     </button>
                   </div>
 
-                  {/* Cấu hình Máy Chủ Quét Công Khai Di Động */}
-                  <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 text-left space-y-1.5">
+                  {/* Cấu hình Máy Chủ Quét Di Động (Hỗ trợ 2 Chế Độ: Wi-Fi Nội Bộ & Cloudflare) */}
+                  <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 text-left space-y-2">
                     <div className="flex items-center justify-between text-[10.5px]">
                       <span className="font-bold text-neutral-500 dark:text-neutral-400">
-                        Địa chỉ máy chủ công khai (Tunnel / IP):
+                        Chọn chế độ máy chủ quét mã:
                       </span>
                     </div>
+
+                    {/* 2 Nút chuyển đổi nhanh chế độ quét 1-chạm */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const wifiUrl = `http://${CURRENT_WIFI_LAN_IP}:5173`;
+                          setCustomHost(wifiUrl);
+                          try { localStorage.setItem('smartchain_custom_host', wifiUrl); } catch (e) {}
+                          setToastMessage(`✓ Đã chuyển sang chế độ Wi-Fi: ${CURRENT_WIFI_LAN_IP}`);
+                          setTimeout(() => setToastMessage(''), 2500);
+                        }}
+                        className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${
+                          customHost.includes(CURRENT_WIFI_LAN_IP)
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shadow-sm'
+                            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
+                        }`}
+                        title="Dành cho điện thoại kết nối chung mạng Wi-Fi với máy tính (Rất ổn định, không lo lỗi mạng)"
+                      >
+                        📡 Wi-Fi ({CURRENT_WIFI_LAN_IP})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomHost(DEFAULT_PUBLIC_TUNNEL_URL);
+                          try { localStorage.setItem('smartchain_custom_host', DEFAULT_PUBLIC_TUNNEL_URL); } catch (e) {}
+                          setToastMessage('✓ Đã chọn chế độ Cloudflare Tunnel');
+                          setTimeout(() => setToastMessage(''), 2500);
+                        }}
+                        className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${
+                          customHost.includes('trycloudflare.com')
+                            ? 'bg-orange-500/15 text-[#F95716] border-orange-500/30 shadow-sm'
+                            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
+                        }`}
+                        title="Dành cho điện thoại dùng mạng 4G/5G hoặc ở xa qua Internet"
+                      >
+                        ☁️ Cloudflare (4G/5G)
+                      </button>
+                    </div>
+
                     <input
                       type="text"
                       value={customHost}
@@ -926,11 +968,12 @@ export default function ConsumerPortalPage({
                           localStorage.setItem('smartchain_custom_host', val);
                         } catch (err) {}
                       }}
-                      placeholder="https://...trycloudflare.com"
+                      placeholder="Nhập IP LAN hoặc link tunnel..."
                       className="w-full rounded-xl border border-orange-950/10 dark:border-orange-500/20 bg-neutral-50 dark:bg-black/30 px-3 py-1.5 font-mono text-[11px] font-bold text-[#F95716] focus:outline-none focus:border-[#F95716]"
                     />
                     <p className="text-[9.5px] text-neutral-400 leading-tight">
-                      Mặc định đã gán Cloudflare Tunnel. Bất kỳ điện thoại nào quét tem cũng sẽ mở ngay mà không gặp lỗi kết nối nội bộ.
+                      • <strong>Cùng Wi-Fi:</strong> Bấm nút <code className="text-emerald-500">📡 Wi-Fi</code> là quét được ngay 100%.<br />
+                      • <strong>Dùng 4G/5G:</strong> Bấm <code className="text-[#F95716]">☁️ Cloudflare</code> và dán link hầm mới tạo.
                     </p>
                   </div>
                 </div>

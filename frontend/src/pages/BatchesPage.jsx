@@ -57,7 +57,7 @@ export default function BatchesPage({
     if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost') {
       return window.location.origin;
     }
-    return 'https://examine-ensures-supporting-tennessee.trycloudflare.com';
+    return 'http://172.17.74.89:5173';
   });
   const [activeQrModal, setActiveQrModal] = useState(null); // { code, title, status, isBatch }
   const [copiedUrl, setCopiedUrl] = useState(false);
