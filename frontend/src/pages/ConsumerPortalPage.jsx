@@ -32,7 +32,7 @@ import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaReso
 import { traceByCode } from '../services/api';
 
 const CURRENT_WIFI_LAN_IP = '172.17.74.89';
-const DEFAULT_PUBLIC_TUNNEL_URL = 'https://short-lessons-estimated-radar.trycloudflare.com';
+const DEFAULT_PUBLIC_TUNNEL_URL = 'https://sons-peaceful-php-resolutions.trycloudflare.com';
 
 const CATEGORY_TEMP_RANGES = {
   VEG_FRUIT: '8 - 12°C',
@@ -386,6 +386,13 @@ export default function ConsumerPortalPage({
   // Định dạng trạng thái quầy kệ
   const renderBatchStatusBadge = (status = '') => {
     const s = String(status).toUpperCase();
+    if (s.includes('RECALL')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-red-600 text-white shadow-md animate-pulse">
+          <AlertTriangle size={13} /> 🚨 Thu Hồi Khẩn Cấp
+        </span>
+      );
+    }
     if (s === 'ON_SHELF' || s === 'STOCKED_SHELF') {
       return (
         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
@@ -720,6 +727,19 @@ export default function ConsumerPortalPage({
                     {copiedBatch ? '✓ Đã chép' : activeBatchData.batch_code}
                   </button>
                 </div>
+
+                {/* CẢNH BÁO THU HỒI NẾU LÔ HÀNG BỊ PHÁT LỆNH THU HỒI */}
+                {String(activeBatchData.status || '').toUpperCase().includes('RECALL') && (
+                  <div className="p-4 rounded-2xl bg-red-600 text-white shadow-md border border-red-400 space-y-1">
+                    <div className="flex items-center gap-2 font-black text-sm">
+                      <AlertTriangle size={18} />
+                      CẢNH BÁO AN TOÀN THỰC PHẨM KHẨN CẤP (RECALL NOTICE)
+                    </div>
+                    <p className="text-xs text-red-100 leading-relaxed">
+                      Lô hàng này đã bị hệ thống SmartChain ban hành lệnh thu hồi khẩn cấp. Quý khách vui lòng <strong>KHÔNG SỬ DỤNG</strong> sản phẩm này và liên hệ ngay với quầy Chăm Sóc Khách Hàng của siêu thị để được hoàn trả 100% giá trị.
+                    </p>
+                  </div>
+                )}
 
                 {/* 4 Chỉ số thực tế từ CSDL & Cảm biến */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">

@@ -190,17 +190,20 @@ export default function ColdChainIotPage({
 
   // Trạng thái hành trình lô hàng
   const rawStatus = selectedBatch?.status || 'CREATED';
-  const isTripRunning = hasSelectedBatch && isBatchAssigned && rawStatus === 'IN_TRANSIT';
+  const isRecalled = String(rawStatus).toUpperCase().includes('RECALL');
+  const isTripRunning = hasSelectedBatch && isBatchAssigned && rawStatus === 'IN_TRANSIT' && !isRecalled;
   const isTripDelivered =
     hasSelectedBatch &&
     isBatchAssigned &&
-    (rawStatus === 'ARRIVED_AT_STORE' || rawStatus === 'DELIVERED' || rawStatus === 'ON_SHELF');
+    (rawStatus === 'ARRIVED_AT_STORE' || rawStatus === 'DELIVERED' || rawStatus === 'ON_SHELF') &&
+    !isRecalled;
   const isReady =
     hasSelectedBatch &&
     isBatchAssigned &&
     !isPendingDriverAcceptance &&
     !isTripRunning &&
-    !isTripDelivered;
+    !isTripDelivered &&
+    !isRecalled;
 
   // Lấy dữ liệu tuyến đường đa dạng theo lô hàng được chọn
   const currentRoute = getRouteForBatch(selectedBatch?.batch_code, selectedBatch);
@@ -353,6 +356,8 @@ export default function ColdChainIotPage({
 
   if (!hasSelectedBatch) {
     statusDistanceText = 'Chưa chọn lô hàng';
+  } else if (isRecalled) {
+    statusDistanceText = '🚨 ĐÃ BAN HÀNH LỆNH THU HỒI KHẨN CẤP — NIÊM PHONG TOÀN BỘ PHƯƠNG TIỆN & DỪNG LƯU THÔNG!';
   } else if (!isBatchAssigned) {
     statusDistanceText = 'Lô hàng đang lưu kho, chưa phân công tài xế nhận';
   } else if (isPendingDriverAcceptance) {
@@ -1212,6 +1217,12 @@ export default function ColdChainIotPage({
                       ✕ Từ chối lô
                     </button>
                   </>
+                )}
+
+                {isRecalled && (
+                  <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-red-600 text-white text-xs font-black shadow-lg">
+                    🚨 LÔ HÀNG ĐÃ CÓ LỆNH THU HỒI KHẨN CẤP (KHÓA PHƯƠNG TIỆN)
+                  </div>
                 )}
 
                 {isReady && (

@@ -371,8 +371,9 @@ export default function OverviewPage({
     );
   }
 
-  // Xác định lô hàng đã lăn bánh hay chưa để đồng bộ giao diện nhất quán với trang Xe Lạnh & IoT
+  // Xác định trạng thái lô hàng: Thu hồi khẩn cấp, Đang di chuyển hoặc Đã bàn giao
   const batchStatusUpper = (selectedBatch?.status || '').toUpperCase();
+  const isRecalled = batchStatusUpper.includes('RECALL');
   const isMovingOrDone = [
     'IN_TRANSIT',
     'ARRIVED_AT_STORE',
@@ -466,8 +467,12 @@ export default function OverviewPage({
               </span>
               <span
                 className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                  batchStatusUpper === 'IN_TRANSIT'
+                  isRecalled
+                    ? 'bg-red-600 text-white shadow-sm font-black'
+                    : batchStatusUpper === 'IN_TRANSIT'
                     ? 'bg-orange-500/15 text-[#F95716]'
+                    : batchStatusUpper === 'ON_SHELF'
+                    ? 'bg-emerald-600 text-white font-bold'
                     : isMovingOrDone
                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                     : batchStatusUpper === 'ASSIGNED_PENDING'
@@ -477,15 +482,19 @@ export default function OverviewPage({
                     : 'bg-neutral-200/70 dark:bg-white/10 text-neutral-600 dark:text-neutral-300'
                 }`}
               >
-                {batchStatusUpper === 'IN_TRANSIT'
+                {isRecalled
+                  ? '🚨 ĐÃ BAN HÀNH LỆNH THU HỒI KHẨN CẤP'
+                  : batchStatusUpper === 'IN_TRANSIT'
                   ? '⚡ Đang vận chuyển trên tuyến'
+                  : batchStatusUpper === 'ON_SHELF'
+                  ? '🏪 Đang bày bán quầy kệ siêu thị'
                   : isMovingOrDone
-                  ? '✓ Đã bàn giao siêu thị'
+                  ? '✓ Đã bàn giao kho siêu thị'
                   : batchStatusUpper === 'ASSIGNED_PENDING'
                   ? '⏳ Chờ tài xế xác nhận nhận chuyến'
                   : hasSelectedPlate
-                  ? '○ Tài xế đã nhận • Chờ rời bến'
-                  : '○ Lô hàng lưu kho • Chưa phân công xe'}
+                  ? '○ Đã phân xe • Chờ bốc hàng'
+                  : '○ Chờ phân xe'}
               </span>
             </div>
             <h3 className="text-lg sm:text-xl font-black text-[#1A1A1A] dark:text-[#F5F5F5] mt-1.5">
@@ -493,11 +502,18 @@ export default function OverviewPage({
             </h3>
           </div>
 
-          {!isMovingOrDone && (
+          {isRecalled ? (
+            <div className="px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+              <AlertTriangle size={16} className="text-red-500 shrink-0" />
+              <span>
+                LỆNH THU HỒI KHẨN CẤP ĐANG CÓ HIỆU LỰC — Toàn bộ tem niêm phong và mã QR tiêu dùng của lô hàng này đã bị hủy hiệu lực (SEAL_VOID). Cấm xuất bến, cấm lưu thông trên đường, cấm bày bán và cấm thanh toán tại quầy thu ngân.
+              </span>
+            </div>
+          ) : !isMovingOrDone ? (
             <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-700 dark:text-amber-300">
               Chuyến xe chưa khởi hành — Chỉ hiển thị thông tin lô hàng & khối lượng. Dữ liệu nhiệt độ, khí sinh học sẽ tự động hiển thị thời gian thực khi xe rời bến.
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="mt-4 pt-3.5 border-t border-orange-950/5 dark:border-orange-500/10 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
@@ -577,17 +593,19 @@ export default function OverviewPage({
               </div>
               <span
                 className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
-                  isMovingOrDone
+                  isRecalled
+                    ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                    : isMovingOrDone
                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                     : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
-                    isMovingOrDone ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+                    isRecalled ? 'bg-red-500' : isMovingOrDone ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
                   }`}
                 />
-                {isMovingOrDone ? 'Trực Tuyến' : 'Chờ khởi hành'}
+                {isRecalled ? 'Niêm Phong Thu Hồi' : isMovingOrDone ? 'Trực Tuyến' : 'Chờ khởi hành'}
               </span>
             </div>
 
@@ -647,14 +665,18 @@ export default function OverviewPage({
                 </div>
                 <div
                   className={`mt-2 text-lg font-black ${
-                    !isMovingOrDone
+                    isRecalled
+                      ? 'text-red-600 dark:text-red-400'
+                      : !isMovingOrDone
                       ? 'text-neutral-400'
                       : latestTelemetry?.door_open
                       ? 'text-red-500'
                       : 'text-emerald-600 dark:text-emerald-400'
                   }`}
                 >
-                  {!isMovingOrDone
+                  {isRecalled
+                    ? 'Đã Niêm Phong'
+                    : !isMovingOrDone
                     ? 'Chờ khởi hành'
                     : latestTelemetry?.door_open
                     ? 'Cửa Mở'
@@ -673,24 +695,30 @@ export default function OverviewPage({
               <div className="mt-1">
                 <span
                   className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    effectiveRelay
+                    isRecalled
+                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                      : effectiveRelay
                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                       : 'bg-neutral-500/10 text-neutral-400'
                   }`}
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      effectiveRelay ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
+                      isRecalled
+                        ? 'bg-red-500'
+                        : effectiveRelay
+                        ? 'bg-emerald-500 animate-pulse'
+                        : 'bg-neutral-400'
                     }`}
                   />
-                  {effectiveRelay ? 'Hoạt động' : isMovingOrDone ? 'Đang nghỉ' : 'Chờ khởi hành'}
+                  {isRecalled ? 'Ngắt toàn bộ' : effectiveRelay ? 'Hoạt động' : isMovingOrDone ? 'Đang nghỉ' : 'Chờ khởi hành'}
                 </span>
               </div>
             </div>
             <button
               type="button"
               onClick={handleToggleRelay}
-              disabled={!isMovingOrDone}
+              disabled={!isMovingOrDone || isRecalled}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
                 !isMovingOrDone
                   ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'

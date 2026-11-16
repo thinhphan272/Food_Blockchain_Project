@@ -133,7 +133,10 @@ export default function QcInspectionPage({
               let stText = 'Chờ kiểm';
               let stColor = 'bg-neutral-500/10 text-neutral-500';
 
-              if (st === 'DELIVERED' || st === 'ARRIVED_AT_STORE') {
+              if (st.includes('RECALL')) {
+                stText = '🚨 Đã thu hồi';
+                stColor = 'bg-red-600 text-white font-extrabold';
+              } else if (st === 'DELIVERED' || st === 'ARRIVED_AT_STORE') {
                 stText = 'Đã cập bến (Chờ KCS)';
                 stColor = 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold';
               } else if (st === 'IN_TRANSIT') {
@@ -293,7 +296,7 @@ export default function QcInspectionPage({
           <div className="flex gap-2 pt-1">
             <button
               type="button"
-              disabled={!selectedBatch}
+              disabled={!selectedBatch || String(selectedBatch?.status || '').toUpperCase().includes('RECALL')}
               onClick={() => handleApproveQc('REJECT')}
               className="flex-1 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all disabled:opacity-40 cursor-pointer"
             >
@@ -301,11 +304,11 @@ export default function QcInspectionPage({
             </button>
             <button
               type="button"
-              disabled={!selectedBatch}
+              disabled={!selectedBatch || String(selectedBatch?.status || '').toUpperCase().includes('RECALL')}
               onClick={() => handleApproveQc('ACCEPT')}
               className="flex-1 rounded-2xl bg-emerald-600 p-3 text-xs font-bold text-white shadow-sm hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer"
             >
-              KÝ DUYỆT NHẬN
+              {String(selectedBatch?.status || '').toUpperCase().includes('RECALL') ? 'ĐÃ THU HỒI (KHÓA DUYỆT)' : 'KÝ DUYỆT NHẬN'}
             </button>
           </div>
         </div>
