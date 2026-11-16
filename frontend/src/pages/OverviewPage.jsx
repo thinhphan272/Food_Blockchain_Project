@@ -11,6 +11,7 @@ import {
   Repeat,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from '../components/MomentumIcons';
 import ColdChainGaugeCard from '../components/dashboard/ColdChainGaugeCard';
 import FrostedHeroCard from '../components/dashboard/FrostedHeroCard';
@@ -62,7 +63,6 @@ export default function OverviewPage({
     'QC_ACCEPTED',
     'ON_SHELF',
     'SOLD',
-    'RECALLED',
   ];
 
   // Lọc danh sách lô hàng theo từ khóa tìm kiếm trên thanh Header
@@ -95,19 +95,31 @@ export default function OverviewPage({
     });
   }, [batches, searchQuery]);
 
-  // Tách riêng: (1) Lô hàng đang quản lý/điều phối/vận chuyển và (2) Lô hàng đã bàn giao
+  // Tách riêng 3 nhóm: (1) Lô hàng có lệnh thu hồi khẩn cấp, (2) Lô hàng đang điều phối/vận chuyển, và (3) Lô hàng đã bàn giao
+  const recalledBatches = React.useMemo(
+    () =>
+      filteredBatches.filter((b) =>
+        (b.status || '').toUpperCase().includes('RECALL')
+      ),
+    [filteredBatches]
+  );
+
   const activeManagementBatches = React.useMemo(
     () =>
       filteredBatches.filter(
-        (b) => !DELIVERED_STATUSES.includes((b.status || '').toUpperCase())
+        (b) =>
+          !(b.status || '').toUpperCase().includes('RECALL') &&
+          !DELIVERED_STATUSES.includes((b.status || '').toUpperCase())
       ),
     [filteredBatches]
   );
 
   const deliveredBatches = React.useMemo(
     () =>
-      filteredBatches.filter((b) =>
-        DELIVERED_STATUSES.includes((b.status || '').toUpperCase())
+      filteredBatches.filter(
+        (b) =>
+          !(b.status || '').toUpperCase().includes('RECALL') &&
+          DELIVERED_STATUSES.includes((b.status || '').toUpperCase())
       ),
     [filteredBatches]
   );
@@ -133,6 +145,7 @@ export default function OverviewPage({
   );
 
   const renderBatchCard = (b, isDeliveredCard = false) => {
+    const isRecalled = String(b.status || '').toUpperCase().includes('RECALL');
     const batchTransport = b.transportJourney || b.transport_journey || {};
     const rawPlate =
       batchTransport.vehicle_plate ||
@@ -155,7 +168,9 @@ export default function OverviewPage({
         key={b.batch_code}
         onClick={() => onSelectBatch && onSelectBatch(b)}
         className={`group relative p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-          isDeliveredCard
+          isRecalled
+            ? 'border-red-500/30 bg-red-500/[0.02] dark:bg-[#1C140F] hover:border-red-500 hover:shadow-lg hover:-translate-y-0.5'
+            : isDeliveredCard
             ? 'border-emerald-500/20 bg-emerald-500/[0.02] dark:bg-[#1C140F] hover:border-emerald-500 hover:shadow-lg hover:-translate-y-0.5'
             : 'border-orange-950/10 dark:border-orange-500/20 bg-white dark:bg-[#1C140F] hover:border-[#F95716] dark:hover:border-[#F95716] hover:shadow-lg hover:-translate-y-0.5'
         }`}
@@ -164,7 +179,9 @@ export default function OverviewPage({
           <div className="flex items-center justify-between gap-2 mb-2">
             <span
               className={`font-mono text-xs font-black px-2.5 py-0.5 rounded-md ${
-                isDeliveredCard
+                isRecalled
+                  ? 'text-red-600 bg-red-500/10'
+                  : isDeliveredCard
                   ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
                   : 'text-[#F95716] bg-orange-500/10'
               }`}
@@ -173,7 +190,9 @@ export default function OverviewPage({
             </span>
             <span
               className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full ${
-                b.status === 'IN_TRANSIT'
+                isRecalled
+                  ? 'bg-red-600 text-white font-black'
+                  : b.status === 'IN_TRANSIT'
                   ? 'bg-orange-500/15 text-[#F95716]'
                   : isDeliveredCard
                   ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
@@ -184,15 +203,17 @@ export default function OverviewPage({
                   : 'bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400'
               }`}
             >
-              {b.status === 'IN_TRANSIT'
+              {isRecalled
+                ? '🚨 Thu hồi khẩn cấp'
+                : b.status === 'IN_TRANSIT'
                 ? '⚡ Đang vận chuyển'
                 : isDeliveredCard
                 ? '✓ Đã bàn giao'
                 : b.status === 'ASSIGNED_PENDING'
                 ? '⏳ Chờ tài xế nhận'
                 : hasPlate
-                ? '○ Chờ rời bến'
-                : '○ Chưa phân công'}
+                ? '○ Chờ bốc hàng'
+                : '○ Chờ phân xe'}
             </span>
           </div>
           <h4 className="text-base font-black text-[#1A1A1A] dark:text-[#F5F5F5] group-hover:text-[#F95716] transition-colors line-clamp-1">
@@ -218,12 +239,20 @@ export default function OverviewPage({
 
         <div
           className={`mt-4 pt-3 border-t border-orange-950/5 dark:border-orange-500/10 flex items-center justify-between text-xs font-bold ${
-            isDeliveredCard
+            isRecalled
+              ? 'text-red-600 dark:text-red-400'
+              : isDeliveredCard
               ? 'text-emerald-600 dark:text-emerald-400'
               : 'text-[#F95716]'
           }`}
         >
-          <span>{isDeliveredCard ? 'Xem hồ sơ lô đã bàn giao' : 'Xem thông tin & giám sát lô'}</span>
+          <span>
+            {isRecalled
+              ? 'Xem hồ sơ thu hồi khẩn cấp'
+              : isDeliveredCard
+              ? 'Xem hồ sơ lô đã bàn giao'
+              : 'Xem thông tin & giám sát lô'}
+          </span>
           <ArrowUpRight
             size={14}
             className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
@@ -367,6 +396,37 @@ export default function OverviewPage({
             </div>
           )}
         </div>
+
+        {/* PHẦN 3: KHU VỰC RIÊNG CHO CÁC LÔ HÀNG CÓ LỆNH THU HỒI KHẨN CẤP */}
+        {recalledBatches.length > 0 && (
+          <div className="rounded-[28px] border border-red-500/30 bg-white p-6 sm:p-8 dark:border-red-500/30 dark:bg-[#1C140F] shadow-[0_8px_30px_rgba(239,68,68,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-red-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-600/30">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-red-600 dark:text-red-400 tracking-tight">
+                    Lô hàng có lệnh thu hồi khẩn cấp ({recalledBatches.length} lô)
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Đã niêm phong dừng lưu thông, mã QR bị hủy hiệu lực (SEAL_VOID) &amp; cấm thanh toán tại quầy thu ngân
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-1.5 rounded-full bg-red-600 text-white text-xs font-black shadow-sm">
+                  🚨 DỪNG LƯU HÀNH
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
+              {recalledBatches.map((b) => renderBatchCard(b, false))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
