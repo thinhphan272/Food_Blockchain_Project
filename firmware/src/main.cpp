@@ -59,6 +59,47 @@ const char* topicConfig = "smartchain/device/ESP32-MULTI-01/config";
 unsigned long lastSend = 0;
 const long sendInterval = 2500;
 
+// -------------------------------------------------------------
+// BỘ ĐỆM NỘI BỘ STORE-AND-FORWARD KHI MẤT KẾT NỐI INTERNET/4G
+// -------------------------------------------------------------
+struct OfflineTelemetryRecord {
+  char json[380];
+  unsigned long recordedAtMillis;
+};
+
+#define MAX_OFFLINE_BUFFER 40
+OfflineTelemetryRecord offlineBuffer[MAX_OFFLINE_BUFFER];
+int offlineBufferCount = 0;
+bool isSimulatedNetworkDrop = false;
+
+void flushOfflineBuffer() {
+  if (offlineBufferCount == 0) return;
+  Serial.printf("[OFFLINE FLUSH] Bat dau truyen %d ban ghi luu tam len HiveMQ & Blockchain...\n", offlineBufferCount);
+  
+  display.clearDisplay();
+  display.fillRect(0, 0, 128, 12, SSD1306_WHITE);
+  display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(4, 2);
+  display.print("DONG BO OFFLINE BUFFER");
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(4, 22);
+  display.printf("Truyen %d goi dem...", offlineBufferCount);
+  display.setCursor(4, 38);
+  display.print("Len Blockchain...");
+  display.display();
+
+  for (int i = 0; i < offlineBufferCount; i++) {
+    Serial.println("[Offline Backfill] " + String(offlineBuffer[i].json));
+    if (mqttClient.connected()) {
+      mqttClient.publish(topicTelemetry.c_str(), offlineBuffer[i].json);
+    }
+    delay(80);
+  }
+  Serial.printf("[OFFLINE FLUSH HOAN TAT] Da dong bo thanh cong %d ban ghi! Khong bi mat du lieu.\n", offlineBufferCount);
+  offlineBufferCount = 0;
+}
+
 void applyNewProfile(const char* cat) {
   if (strcmp(cat, "CHILLED_MEAT") == 0) {
     strcpy(currentProfile.category, "CHILLED_MEAT");
@@ -200,6 +241,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   } else if (strcmp(act, "RELAY_OFF") == 0 || strcmp(act, "COOLING_OFF") == 0) {
     digitalWrite(PIN_RELAY, LOW);
     Serial.println("[ACTUATION] RELAY DA TAT.");
+  } else if (strcmp(act, "SIMULATE_OFFLINE") == 0 || strcmp(act, "NETWORK_DROP") == 0) {
+    isSimulatedNetworkDrop = true;
+    Serial.println("[OFFLINE MODE] KICH HOAT MAT MANG 4G! Bat dau luu ban ghi vao bo dem Flash cuc bo.");
+  } else if (strcmp(act, "SIMULATE_ONLINE") == 0 || strcmp(act, "NETWORK_RESTORE") == 0) {
+    isSimulatedNetworkDrop = false;
+    Serial.println("[ONLINE RESTORED] DA KHOI PHUC MANG 4G! Tien hanh dong bo du lieu dem len Blockchain...");
+    flushOfflineBuffer();
   }
 }
 
@@ -342,6 +390,13 @@ void loop() {
         } else if (strcmp(act, "RELAY_OFF") == 0 || strcmp(act, "COOLING_OFF") == 0) {
           digitalWrite(PIN_RELAY, LOW);
           Serial.println("[ACTUATION] RELAY DA TAT.");
+        } else if (strcmp(act, "SIMULATE_OFFLINE") == 0 || strcmp(act, "NETWORK_DROP") == 0) {
+          isSimulatedNetworkDrop = true;
+          Serial.println("[OFFLINE MODE] KICH HOAT MAT MANG 4G! Bat dau luu ban ghi vao bo dem Flash cuc bo.");
+        } else if (strcmp(act, "SIMULATE_ONLINE") == 0 || strcmp(act, "NETWORK_RESTORE") == 0) {
+          isSimulatedNetworkDrop = false;
+          Serial.println("[ONLINE RESTORED] DA KHOI PHUC MANG 4G! Tien hanh dong bo du lieu dem len Blockchain...");
+          flushOfflineBuffer();
         } else if (strcmp(act, "SET_PROFILE") == 0 || cmdDoc.containsKey("batch_code") || cmdDoc.containsKey("batch")) {
           updateProfileFromJson(cmdDoc);
         }
@@ -463,6 +518,8 @@ void loop() {
       }
     }
 
+    bool isNetworkDown = isSimulatedNetworkDrop;
+
     // Hiển thị OLED Dashboard trực quan, chữ lớn dễ nhìn!
     display.clearDisplay();
 
@@ -471,7 +528,7 @@ void loop() {
     display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(2, 1);
-    display.printf("%-16s %4s", batchCode.c_str(), mqttClient.connected() ? "LIVE" : "SER");
+    display.printf("%-16s %4s", batchCode.c_str(), isNetworkDown ? "OFFL" : (mqttClient.connected() ? "LIVE" : "SER"));
 
     // 2. Nhiệt độ hiển thị CỠ LỚN (TextSize 2) cực kỳ rõ nét
     display.setTextColor(SSD1306_WHITE);
@@ -513,6 +570,11 @@ void loop() {
       } else {
         display.print("! NHIET DO QUA CAO !");
       }
+    } else if (isNetworkDown) {
+      display.fillRect(0, 53, 128, 11, SSD1306_WHITE);
+      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+      display.setCursor(2, 55);
+      display.printf("! DEM OFFLINE: %d GOI !", offlineBufferCount);
     } else {
       display.drawRect(0, 53, 128, 11, SSD1306_WHITE);
       display.setTextColor(SSD1306_WHITE);
@@ -540,13 +602,33 @@ void loop() {
     doc["is_breached"] = isBreached;
     doc["timestamp"] = (unsigned long)millis();
 
-    char buf[420];
-    serializeJson(doc, buf);
-    // Luôn xuất ra Serial để Serial-to-MQTT Bridge nhận dữ liệu 100% thời gian thực không phụ thuộc WiFi
-    Serial.println("[Telemetry Sent] " + String(buf));
+    if (isNetworkDown) {
+      doc["buffered"] = true;
+      doc["offline"] = true;
+      char bufOffline[420];
+      serializeJson(doc, bufOffline);
+      if (offlineBufferCount < MAX_OFFLINE_BUFFER) {
+        strncpy(offlineBuffer[offlineBufferCount].json, bufOffline, sizeof(offlineBuffer[offlineBufferCount].json) - 1);
+        offlineBuffer[offlineBufferCount].recordedAtMillis = now;
+        offlineBufferCount++;
+        Serial.printf("[OFFLINE BUFFER] Mat mang! Da luu goi #%d vao bo dem: Temp=%.1fC, Gas=%.1fppm\n",
+                      offlineBufferCount, effectiveTemp, effectiveGas);
+      } else {
+        Serial.println("[OFFLINE BUFFER] Bo dem da day (40 ban ghi).");
+      }
+    } else {
+      // Nếu vừa có mạng lại và còn dữ liệu đệm, xả đệm trước
+      if (offlineBufferCount > 0) {
+        flushOfflineBuffer();
+      }
 
-    if (mqttClient.connected()) {
-      mqttClient.publish(topicTelemetry.c_str(), buf);
+      char buf[420];
+      serializeJson(doc, buf);
+      Serial.println("[Telemetry Sent] " + String(buf));
+
+      if (mqttClient.connected()) {
+        mqttClient.publish(topicTelemetry.c_str(), buf);
+      }
     }
   }
 }
