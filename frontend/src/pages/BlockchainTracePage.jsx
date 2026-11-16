@@ -21,9 +21,37 @@ export default function BlockchainTracePage({
   const CARD =
     'rounded-[28px] border border-orange-950/5 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:border-orange-500/10 dark:bg-[#1C140F]';
 
+  const [batchSearchTerm, setBatchSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('ALL'); // 'ALL' | 'ACTIVE' | 'RECALLED'
+
   const hasSelectedBatch = Boolean(selectedBatch?.batch_code);
   const selectedMedia = hasSelectedBatch ? resolveFoodBatchMedia(selectedBatch) : null;
   const isAdmin = currentUser?.role === 'ADMIN';
+
+  // Lọc danh sách lô hàng theo từ khóa và trạng thái thu hồi
+  const filteredBatches = React.useMemo(() => {
+    return (batches || []).filter((b) => {
+      const q = batchSearchTerm.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (b.batch_code && b.batch_code.toLowerCase().includes(q)) ||
+        (b.product_name && b.product_name.toLowerCase().includes(q)) ||
+        (b.productName && b.productName.toLowerCase().includes(q)) ||
+        (b.farm_name && b.farm_name.toLowerCase().includes(q)) ||
+        (b.farmName && b.farmName.toLowerCase().includes(q));
+
+      const isRecalled = String(b.status || '').toUpperCase().includes('RECALL');
+      if (statusFilter === 'RECALLED') return matchSearch && isRecalled;
+      if (statusFilter === 'ACTIVE') return matchSearch && !isRecalled;
+      return matchSearch;
+    });
+  }, [batches, batchSearchTerm, statusFilter]);
+
+  const recalledCount = React.useMemo(() => {
+    return (batches || []).filter((b) => String(b.status || '').toUpperCase().includes('RECALL')).length;
+  }, [batches]);
+
+  const activeCount = batches.length - recalledCount;
 
   return (
     <div className="space-y-6">
@@ -33,57 +61,132 @@ export default function BlockchainTracePage({
             Minh Bạch Sổ Cái Blockchain & Lệnh Thu Hồi Khẩn Cấp
           </h2>
           <p className="text-xs text-neutral-400 mt-1">
-            Tra cứu toàn bộ thông tin mã hóa ECDSA và phân tích phả hệ chuỗi cung ứng bằng đồ thị Neo4j
+            Tra cứu toàn diện phả hệ chuỗi cung ứng, đối soát mã băm giao dịch và kích hoạt lệnh thu hồi sản phẩm khẩn cấp
           </p>
         </div>
       </div>
 
-      {/* THANH CHỌN LÔ HÀNG TRA CỨU */}
+      {/* KHUNG TÌM KIẾM & CHỌN LÔ HÀNG (DẠNG LƯỚI RESPONSIVE, KHÔNG SCROLL NGANG) */}
       {batches.length > 0 && (
-        <div className={`${CARD} space-y-3`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
-              Chọn lô hàng tra cứu ({batches.length} lô):
-            </span>
-            <span className="text-xs font-mono font-bold text-[#F95716]">
-              Đang chọn: {selectedBatch?.batch_code || 'Chưa chọn'}
-            </span>
-          </div>
+        <div className={`${CARD} space-y-3.5`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-orange-950/5 dark:border-orange-500/10">
+            <div>
+              <span className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                Chọn lô hàng để tra cứu & thực thi lệnh:
+              </span>
+              <div className="text-[11px] text-neutral-400 mt-0.5">
+                Đang chọn: <strong className="font-mono text-[#F95716]">{selectedBatch?.batch_code || 'Chưa chọn'}</strong>
+                {selectedBatch?.product_name ? ` • ${selectedBatch.product_name}` : ''}
+              </div>
+            </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {batches.map((b) => {
-              const isSelected = selectedBatch?.batch_code === b.batch_code;
-              const isRecalled = String(b.status || '').includes('RECALL');
-
-              return (
+            {/* Ô tìm kiếm nhanh */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={batchSearchTerm}
+                onChange={(e) => setBatchSearchTerm(e.target.value)}
+                placeholder="Tìm mã lô, tên thực phẩm, nông trại..."
+                className="w-full sm:w-64 rounded-full border border-orange-950/10 bg-orange-950/[0.02] dark:border-orange-500/10 dark:bg-white/[0.02] px-3.5 py-1.5 text-xs focus:outline-none focus:border-[#F95716]"
+              />
+              {batchSearchTerm && (
                 <button
                   type="button"
-                  key={b.batch_code}
-                  onClick={() => onSelectBatch && onSelectBatch(b)}
-                  className={`p-3 rounded-2xl border text-left min-w-[200px] shrink-0 transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-[#F95716] bg-[#F95716]/[0.06] shadow-sm'
-                      : 'border-orange-950/5 dark:border-orange-500/10 hover:border-[#F95716]/30 bg-orange-950/[0.01]'
-                  }`}
+                  onClick={() => setBatchSearchTerm('')}
+                  className="text-xs text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
                 >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-mono font-bold text-[#F95716]">{b.batch_code}</span>
-                    {isRecalled && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-bold">
-                        ĐÃ THU HỒI
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] truncate mt-1">
-                    {b.product_name || b.productName}
-                  </div>
-                  <div className="text-[10.5px] text-neutral-400 truncate mt-0.5">
-                    {b.farm_name || b.farmName}
-                  </div>
+                  Xóa
                 </button>
-              );
-            })}
+              )}
+            </div>
           </div>
+
+          {/* Tab lọc trạng thái */}
+          <div className="flex items-center gap-1.5 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer ${
+                statusFilter === 'ALL'
+                  ? 'bg-[#F95716] text-white shadow-sm'
+                  : 'bg-orange-950/[0.03] dark:bg-white/[0.03] text-neutral-500 hover:text-[#1A1A1A]'
+              }`}
+            >
+              Tất cả ({batches.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={`px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer ${
+                statusFilter === 'ACTIVE'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-orange-950/[0.03] dark:bg-white/[0.03] text-neutral-500 hover:text-[#1A1A1A]'
+              }`}
+            >
+              Đang lưu hành ({activeCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('RECALLED')}
+              className={`px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer ${
+                statusFilter === 'RECALLED'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'bg-orange-950/[0.03] dark:bg-white/[0.03] text-neutral-500 hover:text-[#1A1A1A]'
+              }`}
+            >
+              🚨 Đã thu hồi ({recalledCount})
+            </button>
+          </div>
+
+          {/* Lưới lô hàng dạng Grid co giãn (Không cuộn ngang) */}
+          {filteredBatches.length === 0 ? (
+            <div className="text-center py-6 text-neutral-400 text-xs">
+              Không tìm thấy lô hàng nào phù hợp với bộ lọc &quot;{batchSearchTerm}&quot;.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+              {filteredBatches.map((b) => {
+                const isSelected = selectedBatch?.batch_code === b.batch_code;
+                const isRecalled = String(b.status || '').toUpperCase().includes('RECALL');
+
+                return (
+                  <button
+                    type="button"
+                    key={b.batch_code}
+                    onClick={() => onSelectBatch && onSelectBatch(b)}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                      isSelected
+                        ? 'border-[#F95716] bg-[#F95716]/[0.08] shadow-sm ring-1 ring-[#F95716]'
+                        : isRecalled
+                        ? 'border-red-500/30 bg-red-500/[0.03] hover:border-red-500/60'
+                        : 'border-orange-950/5 dark:border-orange-500/10 hover:border-[#F95716]/30 bg-orange-950/[0.01]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 w-full">
+                      <span className="text-xs font-mono font-bold text-[#F95716] truncate">
+                        {b.batch_code}
+                      </span>
+                      {isRecalled ? (
+                        <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-red-600 text-white font-extrabold shrink-0">
+                          THU HỒI
+                        </span>
+                      ) : (
+                        <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                          LƯU HÀNH
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] truncate">
+                      {b.product_name || b.productName}
+                    </div>
+                    <div className="text-[10.5px] text-neutral-400 truncate">
+                      {b.farm_name || b.farmName || 'Nông trại công nghệ cao'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

@@ -90,6 +90,15 @@ export default function BatchesPage({
     }
   }, [batches, selectedBatch, onSelectBatch]);
 
+  // Phân loại danh sách lô đang lưu hành và các lô có lệnh thu hồi khẩn cấp
+  const recalledBatches = useMemo(() => {
+    return (batches || []).filter((b) => String(b.status || '').toUpperCase().includes('RECALL'));
+  }, [batches]);
+
+  const activeBatches = useMemo(() => {
+    return (batches || []).filter((b) => !String(b.status || '').toUpperCase().includes('RECALL'));
+  }, [batches]);
+
   // Bộ lọc danh sách lô hàng hiển thị
   const displayBatches = useMemo(() => {
     if (!Array.isArray(batches)) return [];
@@ -102,12 +111,21 @@ export default function BatchesPage({
         (b.farm_name && b.farm_name.toLowerCase().includes(q));
 
       const st = String(b.status || '').toUpperCase();
+      const isRecalled = st.includes('RECALL');
+
+      // Nếu người dùng chọn tab Thu hồi khẩn cấp: Chỉ hiển thị lô hàng đã thu hồi
+      if (batchFilterStatus === 'RECALLED') {
+        return matchSearch && isRecalled;
+      }
+
+      // Ở tất cả các tab lưu hành thông thường: BẮT BUỘC loại bỏ hoàn toàn các lô thu hồi khẩn cấp
+      if (isRecalled) return false;
+
       let matchStatus = true;
       if (batchFilterStatus === 'CREATED') matchStatus = st === 'CREATED' || st === 'ASSIGNED_PENDING';
       else if (batchFilterStatus === 'IN_TRANSIT') matchStatus = st === 'READY_FOR_PICKUP' || st === 'IN_TRANSIT';
       else if (batchFilterStatus === 'DELIVERED') matchStatus = st === 'DELIVERED' || st === 'QC_ACCEPTED';
       else if (batchFilterStatus === 'ON_SHELF') matchStatus = st === 'ON_SHELF';
-      else if (batchFilterStatus === 'RECALLED') matchStatus = st.includes('RECALL');
 
       return matchSearch && matchStatus;
     });
@@ -287,10 +305,10 @@ export default function BatchesPage({
             </span>
             <div>
               <h3 className="text-base font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
-                {isProducer ? 'Danh sách Lô hàng của Nông trại' : 'Danh mục Lô hàng Chuỗi cung ứng'}
+                Danh sách Lô hàng Cần Quản lý & Cấp Tem QR
               </h3>
               <p className="text-[11px] text-neutral-400">
-                {isProducer ? 'Chọn một lô hàng để theo dõi tiến trình và quản lý ma trận mã QR' : 'Chọn lô hàng để xem thông tin chi tiết và điều phối vận chuyển'}
+                Chọn lô hàng để sinh ma trận tem QR kép (Tem Thùng Phân Phối & Tem Đơn Vị Người Tiêu Dùng), in nhãn và giám sát trạng thái
               </p>
             </div>
           </div>
@@ -309,11 +327,12 @@ export default function BatchesPage({
         {/* Tab lọc trạng thái */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
           {[
-            { id: 'ALL', label: `Tất cả (${batches.length})` },
+            { id: 'ALL', label: `Tất cả lưu hành (${activeBatches.length})` },
             { id: 'CREATED', label: 'Chờ phân xe' },
             { id: 'IN_TRANSIT', label: 'Đang vận chuyển' },
             { id: 'DELIVERED', label: 'Đã đến kho / KCS' },
             { id: 'ON_SHELF', label: 'Đang bày bán' },
+            { id: 'RECALLED', label: `🚨 Thu hồi khẩn cấp (${recalledBatches.length})` },
           ].map((tab) => (
             <button
               type="button"
@@ -321,7 +340,9 @@ export default function BatchesPage({
               onClick={() => setBatchFilterStatus(tab.id)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 batchFilterStatus === tab.id
-                  ? 'bg-[#F95716] text-white shadow-sm'
+                  ? tab.id === 'RECALLED'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'bg-[#F95716] text-white shadow-sm'
                   : 'bg-orange-950/[0.03] dark:bg-white/[0.03] text-neutral-500 hover:text-[#1A1A1A] dark:hover:text-white'
               }`}
             >
@@ -333,24 +354,47 @@ export default function BatchesPage({
         {/* Danh sách thẻ lô hàng */}
         {displayBatches.length === 0 ? (
           <div className="text-center py-8 text-neutral-400 text-xs">
-            Không tìm thấy lô hàng nào phù hợp với bộ lọc hiện tại.
+            {batchFilterStatus === 'RECALLED'
+              ? 'Hiện không có lô hàng nào trong diện thu hồi khẩn cấp.'
+              : 'Không tìm thấy lô hàng nào phù hợp với bộ lọc hiện tại.'}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {displayBatches.map((b) => {
               const isSelected = selectedBatch?.batch_code === b.batch_code;
-              const status = String(b.status || 'CREATED').toUpperCase();
+              const hasStatus = Boolean(b.status && String(b.status).trim() !== '');
+              const status = String(b.status || '').toUpperCase();
               let badgeColor = 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-400';
-              let statusText = 'Mới tạo';
-              if (status === 'CREATED') { statusText = 'Mới khai báo'; badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400'; }
-              else if (status === 'ASSIGNED_PENDING') { statusText = 'Chờ tài xế nhận'; badgeColor = 'bg-amber-500/10 text-amber-600'; }
-              else if (status === 'READY_FOR_PICKUP') { statusText = 'Chờ bốc hàng'; badgeColor = 'bg-amber-500/10 text-amber-600'; }
-              else if (status === 'IN_TRANSIT') { statusText = 'Đang trên xe lạnh'; badgeColor = 'bg-purple-500/10 text-purple-600'; }
-              else if (status === 'DELIVERED') { statusText = 'Đã cập bến kho'; badgeColor = 'bg-indigo-500/10 text-indigo-600'; }
-              else if (status === 'QC_ACCEPTED') { statusText = 'KCS đã duyệt đạt'; badgeColor = 'bg-emerald-500/10 text-emerald-600'; }
-              else if (status === 'QC_REJECTED') { statusText = 'KCS từ chối'; badgeColor = 'bg-red-500/10 text-red-600'; }
-              else if (status === 'ON_SHELF') { statusText = 'Đang bày bán'; badgeColor = 'bg-emerald-600 text-white'; }
-              else if (status.includes('RECALL')) { statusText = 'Thu hồi khẩn cấp'; badgeColor = 'bg-red-600 text-white'; }
+              let statusText = 'Chờ phân xe';
+
+              if (status === 'CREATED') {
+                statusText = 'Chờ phân xe';
+                badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
+              } else if (status === 'ASSIGNED_PENDING') {
+                statusText = 'Chờ tài xế nhận';
+                badgeColor = 'bg-amber-500/10 text-amber-600';
+              } else if (status === 'READY_FOR_PICKUP') {
+                statusText = 'Chờ bốc hàng';
+                badgeColor = 'bg-amber-500/10 text-amber-600';
+              } else if (status === 'IN_TRANSIT') {
+                statusText = 'Đang trên xe lạnh';
+                badgeColor = 'bg-purple-500/10 text-purple-600';
+              } else if (status === 'DELIVERED') {
+                statusText = 'Đã cập bến kho';
+                badgeColor = 'bg-indigo-500/10 text-indigo-600';
+              } else if (status === 'QC_ACCEPTED') {
+                statusText = 'KCS đã duyệt đạt';
+                badgeColor = 'bg-emerald-500/10 text-emerald-600';
+              } else if (status === 'QC_REJECTED') {
+                statusText = 'KCS từ chối';
+                badgeColor = 'bg-red-500/10 text-red-600';
+              } else if (status === 'ON_SHELF') {
+                statusText = 'Đang bày bán';
+                badgeColor = 'bg-emerald-600 text-white';
+              } else if (status.includes('RECALL')) {
+                statusText = '🚨 Thu hồi khẩn cấp';
+                badgeColor = 'bg-red-600 text-white font-extrabold';
+              }
 
               return (
                 <div
@@ -367,9 +411,11 @@ export default function BatchesPage({
                       <span className="font-mono text-xs font-black text-[#F95716]">
                         {b.batch_code}
                       </span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${badgeColor}`}>
-                        {statusText}
-                      </span>
+                      {hasStatus && (
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${badgeColor}`}>
+                          {statusText}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5] line-clamp-1">
                       {b.product_name || b.productName || 'Sản phẩm chưa đặt tên'}
