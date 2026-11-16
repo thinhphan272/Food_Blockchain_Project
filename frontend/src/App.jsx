@@ -169,11 +169,28 @@ function MainDashboardLayout() {
     }
   });
 
-  // Navigation tabs state
+  // Navigation tabs state: Duy trì tab làm việc qua F5 từ localStorage
   const initialRole = currentUser?.role || 'ADMIN';
   const initialAllowedTabs = ROLE_ALLOWED_TABS[initialRole] || ['overview'];
-  const [activeTab, setActiveTab] = useState(initialAllowedTabs[0] || 'overview');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const savedTab = localStorage.getItem('smartchain_active_tab');
+      if (savedTab && initialAllowedTabs.includes(savedTab)) {
+        return savedTab;
+      }
+    } catch (e) {}
+    return initialAllowedTabs[0] || 'overview';
+  });
   const [activeRole, setActiveRole] = useState(() => RBAC_ACTORS.find((r) => r.role === initialRole) || RBAC_ACTORS[0]);
+
+  // Luôn đồng bộ tab hiện tại vào localStorage khi người dùng chuyển tab
+  useEffect(() => {
+    if (activeTab) {
+      try {
+        localStorage.setItem('smartchain_active_tab', activeTab);
+      } catch (e) {}
+    }
+  }, [activeTab]);
 
   // Auth form states: Để trống ban đầu, bắt buộc người dùng nhập
   const [authPortalMode, setAuthPortalMode] = useState('gateway');
@@ -309,14 +326,42 @@ function MainDashboardLayout() {
   }, [batches, currentUser]);
 
   useEffect(() => {
-    // Giữ trạng thái "Chưa chọn lô hàng" (selectedBatch = null) cho đến khi người dùng/tài xế chủ động chọn lô.
-    // Nếu đang chọn một lô hàng, cập nhật lại dữ liệu mới nhất của lô đó từ danh sách accessibleBatches.
+    // 1. Nếu đang chọn một lô hàng, cập nhật lại dữ liệu mới nhất của lô đó từ danh sách accessibleBatches
     if (selectedBatch) {
       const matched = accessibleBatches.find((b) => b.batch_code === selectedBatch.batch_code);
       if (!matched) {
         setSelectedBatch(null);
+        try { localStorage.removeItem('smartchain_selected_batch_code'); } catch (e) {}
       } else if (matched !== selectedBatch) {
         setSelectedBatch(matched);
+      }
+      return;
+    }
+
+    // 2. Nếu vừa tải lại trang (F5) và selectedBatch đang null: Tự động khôi phục lô đã chọn trước đó
+    if (!selectedBatch && accessibleBatches.length > 0) {
+      try {
+        const savedCode = localStorage.getItem('smartchain_selected_batch_code');
+        if (savedCode) {
+          const matched = accessibleBatches.find((b) => b.batch_code === savedCode);
+          if (matched) {
+            setSelectedBatch(matched);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // Nếu là tài xế (LOGISTICS_DRIVER) mà chưa chọn lô, ưu tiên tự động chọn lô đang chạy IN_TRANSIT
+      if (currentUser?.role === 'LOGISTICS_DRIVER') {
+        const running = accessibleBatches.find((b) => b.status === 'IN_TRANSIT');
+        if (running) {
+          setSelectedBatch(running);
+          return;
+        }
+        if (accessibleBatches.length > 0) {
+          setSelectedBatch(accessibleBatches[0]);
+          return;
+        }
       }
     }
   }, [accessibleBatches, currentUser]);
@@ -392,6 +437,15 @@ function MainDashboardLayout() {
 
   useEffect(() => {
     selectedBatchRef.current = selectedBatch;
+    if (selectedBatch?.batch_code) {
+      try {
+        localStorage.setItem('smartchain_selected_batch_code', selectedBatch.batch_code);
+      } catch (e) {}
+    } else {
+      try {
+        localStorage.removeItem('smartchain_selected_batch_code');
+      } catch (e) {}
+    }
     if (!selectedBatch?.batch_code) {
       setTelemetryList([]);
       setLatestTelemetry(null);
@@ -699,9 +753,17 @@ function MainDashboardLayout() {
         setActiveRole(matchingActor);
 
         const allowed = ROLE_ALLOWED_TABS[usr.role] || ['overview'];
-        if (!allowed.includes(activeTab)) {
-          setActiveTab(allowed[0]);
-        }
+        let targetTab = allowed[0];
+        try {
+          const savedTab = localStorage.getItem('smartchain_active_tab');
+          if (savedTab && allowed.includes(savedTab)) {
+            targetTab = savedTab;
+          }
+        } catch (e) {}
+        setActiveTab(targetTab);
+        try {
+          localStorage.setItem('smartchain_active_tab', targetTab);
+        } catch (e) {}
         navigate('/');
         setSystemAlert({
           type: 'success',
@@ -830,8 +892,11 @@ function MainDashboardLayout() {
   const handleLogout = () => {
     localStorage.removeItem('smartchain_jwt_token');
     localStorage.removeItem('smartchain_user');
+    localStorage.removeItem('smartchain_active_tab');
+    localStorage.removeItem('smartchain_selected_batch_code');
     setCurrentUser(null);
     setJwtToken('');
+    setSelectedBatch(null);
     setAuthError('');
     setShowUserProfileModal(false);
     navigate('/');
@@ -1348,7 +1413,10 @@ function MainDashboardLayout() {
       jwtToken &&
       (location.pathname.includes('/login') ||
         location.pathname === '/login' ||
-        location.pathname === '/register')
+        location.pathname === '/register' ||
+        location.pathname === '/enterprise' ||
+        location.pathname === '/admin' ||
+        location.pathname === '/consumer')
     ) {
       navigate('/', { replace: true });
     }

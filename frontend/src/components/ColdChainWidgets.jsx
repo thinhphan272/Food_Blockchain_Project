@@ -21,7 +21,7 @@ function MapResizer() {
     const timer = setTimeout(() => {
       try {
         map.invalidateSize();
-      } catch (e) {}
+      } catch (e) { }
     }, 150);
     return () => clearTimeout(timer);
   }, [map]);
@@ -551,8 +551,8 @@ export function VietnamColdChainMap({
                     {isTripDelivered
                       ? '✓ Đã bàn giao tại điểm đích'
                       : isTripStarted
-                      ? (isAtDestination ? '📍 Đã tới bến đích' : '⚡ Xe đang di chuyển trên đường')
-                      : '⏳ Xe đang đỗ tại bến xuất phát'}
+                        ? (isAtDestination ? '📍 Đã tới bến đích' : '⚡ Xe đang di chuyển trên đường')
+                        : '⏳ Xe đang đỗ tại bến xuất phát'}
                   </div>
                   <div className="mt-1">Mã lô: <strong>{batchCode}</strong></div>
                   <div>Nhiệt độ hiện tại: <strong>{showLiveMetrics ? `${currentTemp}°C` : '-- °C'}</strong></div>
@@ -569,22 +569,21 @@ export function VietnamColdChainMap({
       {/* Floating status badge */}
       <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 dark:bg-[#1C140F]/95 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-orange-950/10 dark:border-orange-500/20 text-[11px] font-semibold text-[#1A1A1A] dark:text-[#F5F5F5] shadow-sm flex items-center gap-2">
         <span
-          className={`w-2 h-2 rounded-full ${
-            !hasBatchSelected || !isBatchAssigned
+          className={`w-2 h-2 rounded-full ${!hasBatchSelected || !isBatchAssigned
               ? 'bg-neutral-400'
               : isTripStarted
-              ? 'bg-[#F95716] animate-pulse'
-              : isTripDelivered
-              ? 'bg-emerald-500'
-              : 'bg-amber-400'
-          }`}
+                ? 'bg-[#F95716] animate-pulse'
+                : isTripDelivered
+                  ? 'bg-emerald-500'
+                  : 'bg-amber-400'
+            }`}
         />
         <span>
           {!hasBatchSelected
             ? 'Chưa chọn lô hàng'
             : !isBatchAssigned
-            ? 'Chưa có tài xế nhận lô hàng'
-            : routeData.routeName}
+              ? 'Chưa có tài xế nhận lô hàng'
+              : routeData.routeName}
         </span>
       </div>
     </div>
@@ -736,21 +735,20 @@ export function VietnamColdChainMap({
                         const isCurrent = isTripDelivered
                           ? isDest
                           : isTripStarted
-                          ? (isAtDestination ? isDest : idx === 1)
-                          : isOrigin;
+                            ? (isAtDestination ? isDest : idx === 1)
+                            : isOrigin;
 
                         return (
                           <div key={idx} className="flex items-start gap-2.5 text-xs">
                             <span
-                              className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
-                                isCurrent
+                              className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${isCurrent
                                   ? 'bg-[#F95716] animate-ping'
                                   : isOrigin
-                                  ? 'bg-emerald-500'
-                                  : isDest
-                                  ? 'bg-sky-500'
-                                  : 'bg-neutral-300 dark:bg-neutral-600'
-                              }`}
+                                    ? 'bg-emerald-500'
+                                    : isDest
+                                      ? 'bg-sky-500'
+                                      : 'bg-neutral-300 dark:bg-neutral-600'
+                                }`}
                             />
                             <div>
                               <div className={`font-bold ${isCurrent ? 'text-[#F95716]' : 'text-[#1A1A1A] dark:text-[#F5F5F5]'}`}>
@@ -833,8 +831,8 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
       desc: isTransporting
         ? `Nhiệt độ hiện tại: ${Number(latestTelemetry?.temperature ?? latestTelemetry?.temp ?? 8.7).toFixed(1)}°C • Khí: ${Number(latestTelemetry?.gas_ppm ?? latestTelemetry?.gas_value ?? 0).toFixed(1)} ppm`
         : hasVehicle
-        ? 'Chờ tài xế khởi hành chuyến xe • Cảm biến nhiệt độ & khí ở chế độ chờ'
-        : 'Chưa phân công xe vận chuyển • Cảm biến chưa kích hoạt',
+          ? 'Chờ tài xế khởi hành chuyến xe • Cảm biến nhiệt độ & khí ở chế độ chờ'
+          : 'Chưa phân công xe vận chuyển • Cảm biến chưa kích hoạt',
       status: isArrivedOrLater ? 'COMPLETED' : batchStatus === 'IN_TRANSIT' ? 'ACTIVE' : 'PENDING',
       time: batchStatus === 'IN_TRANSIT' ? `Cập nhật ${currentTime}` : isArrivedOrLater ? 'Đã bàn giao' : hasVehicle ? 'Chờ rời bến' : 'Chưa phân công',
     },
@@ -872,20 +870,18 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
         return (
           <div
             key={st.id || idx}
-            className={`flex items-center gap-3.5 p-3.5 rounded-2xl border transition-all ${
-              isActive
+            className={`flex items-center gap-3.5 p-3.5 rounded-2xl border transition-all ${isActive
                 ? 'border-[#F95716]/30 bg-[#F95716]/[0.03] shadow-[0_4px_16px_rgba(249,87,22,0.08)]'
                 : 'border-orange-950/5 dark:border-orange-500/10 bg-white/40 dark:bg-white/[0.02]'
-            }`}
+              }`}
           >
             <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold ${
-                isDone
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold ${isDone
                   ? 'bg-emerald-500 text-white shadow-sm'
                   : isActive
-                  ? 'bg-[#F95716] text-white shadow-[0_4px_12px_rgba(249,87,22,0.30)]'
-                  : 'bg-orange-950/[0.05] dark:bg-white/10 text-neutral-400'
-              }`}
+                    ? 'bg-[#F95716] text-white shadow-[0_4px_12px_rgba(249,87,22,0.30)]'
+                    : 'bg-orange-950/[0.05] dark:bg-white/10 text-neutral-400'
+                }`}
             >
               {idx + 1}
             </div>
@@ -900,13 +896,12 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
               </div>
               <div className="mt-1 flex items-center gap-2">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    isDone
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${isDone
                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                       : isActive
-                      ? 'bg-[#F95716]/10 text-[#F95716]'
-                      : 'bg-orange-950/[0.04] dark:bg-white/5 text-neutral-400'
-                  }`}
+                        ? 'bg-[#F95716]/10 text-[#F95716]'
+                        : 'bg-orange-950/[0.04] dark:bg-white/5 text-neutral-400'
+                    }`}
                 >
                   {statusLabel}
                 </span>
