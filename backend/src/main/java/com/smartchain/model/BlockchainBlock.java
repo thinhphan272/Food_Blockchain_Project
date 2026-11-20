@@ -98,21 +98,36 @@ public class BlockchainBlock {
         if (dataPayload != null && dataPayload.containsKey("description")) {
             return String.valueOf(dataPayload.get("description"));
         }
+        if (dataPayload != null && dataPayload.containsKey("message")) {
+            return String.valueOf(dataPayload.get("message"));
+        }
         if (dataPayload != null && dataPayload.containsKey("reason")) {
-            return String.valueOf(dataPayload.get("reason"));
+            return "Lý do: " + String.valueOf(dataPayload.get("reason"));
         }
         switch (eventType != null ? eventType : "") {
             case "GENESIS_BATCH_CREATED":
                 return "Khai báo nguồn gốc lô hàng tại nông trại, niêm phong nguồn gốc và đúc khối Genesis #0.";
+            case "DRIVER_DEPARTED_IN_TRANSIT":
+                return "Tài xế tiếp nhận lô hàng, niêm phong thùng xe và khởi hành vận chuyển trên tuyến đường lạnh.";
+            case "TRUCK_ARRIVED_AT_SUPERMARKET":
+                return "Xe tải lạnh cập bến an toàn tại cổng tiếp nhận siêu thị Co.opmart, chuyển giao cho KCS kiểm định.";
             case "COLD_CHAIN_IOT_SYNCED":
             case "OTA_PROFILE_SYNCED_TO_TRUCK":
-                return "Bàn giao vận chuyển và đồng bộ quy chuẩn vi khí hậu xuống xe lạnh.";
+                return "Đồng bộ ngưỡng nhiệt độ và cấu hình cảm biến IoT xuống thùng xe lạnh.";
             case "INBOUND_QC_SMART_CONTRACT_APPROVED":
-                return "Đối soát vi khí hậu Merkle Root, đánh giá độ tươi TTI và ký số Smart Contract nhận hàng.";
+                return "Kiểm định viên KCS nghiệm thu đạt chuẩn độ tươi TTI và ký hợp đồng thông minh tiếp nhận.";
+            case "INBOUND_QC_SMART_CONTRACT_REJECTED":
+                return "Kiểm định viên KCS từ chối tiếp nhận do phát hiện suy giảm chất lượng / vi phạm chuỗi lạnh.";
             case "SHELF_STOCKED_FEFO_ACTIVE":
-                return "Nhập kệ hàng thông minh, phân bổ vị trí theo hạn dùng thực tế FEFO.";
+                return "Phân bổ lô hàng lên quầy kệ thông minh theo nguyên tắc hết hạn trước xuất trước (FEFO).";
             case "POS_ITEM_SOLD_SEAL_VOID":
-                return "Thanh toán POS, kích hoạt khóa phân tán Redlock và hủy tem niêm phong.";
+                return "Khách hàng quét mã mua lẻ tại quầy thu ngân, hệ thống xác thực thanh toán và hủy niêm phong tem QR.";
+            case "EMERGENCY_RECALL_ISSUED":
+                return "Ban hành lệnh thu hồi khẩn cấp: Vô hiệu hóa toàn bộ mã QR của lô hàng trên toàn hệ thống.";
+            case "UNAUTHORIZED_DOOR_OPEN_BREACH":
+                return "Cảnh báo vi phạm an ninh: Cửa thùng xe mở trái phép khi đang di chuyển trên đường.";
+            case "CONFIRM_RECALL_ACCEPTED":
+                return "Nông trại xác nhận lệnh thu hồi lô hàng và tiến hành xử lý tiêu hủy / thu hồi tại gốc.";
             default:
                 return "Ghi nhận sự kiện chuỗi cung ứng vào sổ cái bất biến.";
         }

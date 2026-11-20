@@ -24,7 +24,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Bộ điều khiển trung tâm phục vụ 100% quy trình 6 Giai đoạn của Hệ thống Truy xuất Nguồn gốc Siêu thị
+ * Bộ điều khiển trung tâm phục vụ 100% quy trình 6 Giai đoạn của Hệ thống Truy
+ * xuất Nguồn gốc Siêu thị
  * và Bảng điều khiển 5 Cơ sở dữ liệu NoSQL Polyglot.
  */
 @RestController
@@ -61,15 +62,15 @@ public class SupplyChainWorkflowController {
     private String neo4jHost;
 
     public SupplyChainWorkflowController(StorageProfileRepository profileRepository,
-                                         UserRepository userRepository,
-                                         RoleRepository roleRepository,
-                                         BlockchainLedgerService blockchainService,
-                                         CassandraTelemetryService cassandraService,
-                                         RedisPolyglotService redisService,
-                                         Neo4jSupplyChainService neo4jService,
-                                         AiShelfLifePredictionService aiService,
-                                         MqttIngestionService mqttService,
-                                         SimpMessagingTemplate messagingTemplate) {
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            BlockchainLedgerService blockchainService,
+            CassandraTelemetryService cassandraService,
+            RedisPolyglotService redisService,
+            Neo4jSupplyChainService neo4jService,
+            AiShelfLifePredictionService aiService,
+            MqttIngestionService mqttService,
+            SimpMessagingTemplate messagingTemplate) {
         this.profileRepository = profileRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -98,36 +99,44 @@ public class SupplyChainWorkflowController {
     @SuppressWarnings("unchecked")
     @PostMapping("/batches")
     public ResponseEntity<?> createPolymorphicBatch(@RequestBody Map<String, Object> body) {
-        String batchCode = String.valueOf(body.getOrDefault("batch_code", body.getOrDefault("batchCode", "LOT-NEW-" + (System.currentTimeMillis() % 10000))));
-        String productName = String.valueOf(body.getOrDefault("product_name", body.getOrDefault("productName", "Thực phẩm Tươi sống")));
-        String category = String.valueOf(body.getOrDefault("category", body.getOrDefault("categoryCode", "VEG_FRUIT"))).toUpperCase();
-        String farmName = String.valueOf(body.getOrDefault("farm_name", body.getOrDefault("farmName", body.getOrDefault("farmOrigin", "Nông trại Liên kết VietGAP"))));
+        String batchCode = String.valueOf(body.getOrDefault("batch_code",
+                body.getOrDefault("batchCode", "LOT-NEW-" + (System.currentTimeMillis() % 10000))));
+        String productName = String
+                .valueOf(body.getOrDefault("product_name", body.getOrDefault("productName", "Thực phẩm Tươi sống")));
+        String category = String.valueOf(body.getOrDefault("category", body.getOrDefault("categoryCode", "VEG_FRUIT")))
+                .toUpperCase();
+        String farmName = String.valueOf(body.getOrDefault("farm_name",
+                body.getOrDefault("farmName", body.getOrDefault("farmOrigin", "Nông trại Liên kết VietGAP"))));
         int packageCount = body.get("package_count") instanceof Number p1 ? p1.intValue()
                 : (body.get("packageCount") instanceof Number p2 ? p2.intValue() : 50);
         double weightPerPackage = body.get("weight_per_package_kg") instanceof Number wp1 ? wp1.doubleValue()
                 : (body.get("weightPerPackageKg") instanceof Number wp2 ? wp2.doubleValue() : 10.0);
-        String packageUnit = String.valueOf(body.getOrDefault("package_unit", body.getOrDefault("packageUnit", "Thùng carton tiêu chuẩn")));
+        String packageUnit = String.valueOf(
+                body.getOrDefault("package_unit", body.getOrDefault("packageUnit", "Thùng carton tiêu chuẩn")));
         int unitsPerPackage = body.get("units_per_package") instanceof Number up1 ? up1.intValue()
                 : (body.get("unitsPerPackage") instanceof Number up2 ? up2.intValue() : 20);
 
         double totalWeight = body.get("total_weight_kg") instanceof Number tw1 ? tw1.doubleValue()
                 : (body.get("totalWeightKg") instanceof Number tw2 ? tw2.doubleValue()
-                : (body.get("weightKg") instanceof Number w1 ? w1.doubleValue()
-                : (body.get("weight_kg") instanceof Number w2 ? w2.doubleValue() : packageCount * weightPerPackage)));
+                        : (body.get("weightKg") instanceof Number w1 ? w1.doubleValue()
+                                : (body.get("weight_kg") instanceof Number w2 ? w2.doubleValue()
+                                        : packageCount * weightPerPackage)));
 
         if (totalWeight < 100.0) {
             totalWeight = Math.max(100.0, packageCount * weightPerPackage);
         }
-        if (totalWeight < 100.0) totalWeight = 500.0;
+        if (totalWeight < 100.0)
+            totalWeight = 500.0;
 
         int unitCount = body.get("unit_count") instanceof Number n1 ? n1.intValue()
                 : (body.get("unitCount") instanceof Number n2 ? n2.intValue() : packageCount * unitsPerPackage);
         double weightKg = totalWeight > 0 ? Math.max(0.1, totalWeight / unitCount)
                 : (body.get("unit_weight_kg") instanceof Number u1 ? u1.doubleValue()
-                : (body.get("unitWeightKg") instanceof Number u2 ? u2.doubleValue() : 0.5));
+                        : (body.get("unitWeightKg") instanceof Number u2 ? u2.doubleValue() : 0.5));
         double price = body.get("unit_price") instanceof Number p1 ? p1.doubleValue()
                 : (body.get("unitPrice") instanceof Number p2 ? p2.doubleValue() : 65000.0);
-        String vehiclePlate = String.valueOf(body.getOrDefault("transportVehiclePlate", body.getOrDefault("vehicle_plate", body.getOrDefault("vehiclePlate", "")))).trim();
+        String vehiclePlate = String.valueOf(body.getOrDefault("transportVehiclePlate",
+                body.getOrDefault("vehicle_plate", body.getOrDefault("vehiclePlate", "")))).trim();
 
         FoodBatchDocument doc = new FoodBatchDocument();
         doc.setBatchCode(batchCode);
@@ -149,7 +158,8 @@ public class SupplyChainWorkflowController {
         doc.getTransportJourney().put("vehicle_plate", vehiclePlate);
         if (!vehiclePlate.isEmpty()) {
             String matchedDriver = userRepository.findAll().stream()
-                    .filter(u -> u.getAssignedEntity() != null && u.getAssignedEntity().toUpperCase().contains(vehiclePlate.toUpperCase()))
+                    .filter(u -> u.getAssignedEntity() != null
+                            && u.getAssignedEntity().toUpperCase().contains(vehiclePlate.toUpperCase()))
                     .map(com.smartchain.entity.User::getFullName)
                     .findFirst()
                     .orElse("");
@@ -179,7 +189,8 @@ public class SupplyChainWorkflowController {
         }
 
         blockchainService.saveFoodBatch(doc);
-        List<FoodBatchDocument.ItemQrSerial> items = blockchainService.generateItemQrSerials(batchCode, 5, weightKg, price);
+        List<FoodBatchDocument.ItemQrSerial> items = blockchainService.generateItemQrSerials(batchCode, 5, weightKg,
+                price);
 
         // Đúc Khối Genesis #0 trên Sổ cái Blockchain
         BlockchainBlock genesisBlock = blockchainService.mintBlock(
@@ -193,18 +204,25 @@ public class SupplyChainWorkflowController {
                         "category", category,
                         "unitCount", unitCount,
                         "dynamicAttributes", doc.getDynamicAttributes(),
-                        "cultivationDetails", doc.getCultivationDetails()
-                ),
-                List.of("GENESIS|" + batchCode + "|" + Instant.now())
-        );
+                        "cultivationDetails", doc.getCultivationDetails()),
+                List.of("GENESIS|" + batchCode + "|" + Instant.now()));
 
         // Ghi nhận nút Nông trại & Lô hàng vào Đồ thị Neo4j
         neo4jService.upsertBatchToGraph(
                 batchCode, productName, category, farmName, vehiclePlate,
                 Collections.emptyList(),
                 Collections.emptyList(),
-                items.stream().map(FoodBatchDocument.ItemQrSerial::getSerialCode).collect(Collectors.toList())
-        );
+                items.stream().map(FoodBatchDocument.ItemQrSerial::getSerialCode).collect(Collectors.toList()));
+
+        // Phát sự kiện đồng bộ toàn hệ thống qua WebSocket để Admin, Tài xế, Quản lý lô
+        // thấy ngay lập tức
+        Map<String, Object> wsPayload = new LinkedHashMap<>();
+        wsPayload.put("batchCode", batchCode);
+        wsPayload.put("status", doc.getStatus());
+        wsPayload.put("event", "BATCH_CREATED");
+        wsPayload.put("productName", productName);
+        wsPayload.put("timestamp", Instant.now().toString());
+        messagingTemplate.convertAndSend("/topic/batch-status", wsPayload);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", doc.getStatus());
@@ -228,24 +246,35 @@ public class SupplyChainWorkflowController {
 
         if (body.containsKey("productName") || body.containsKey("product_name")) {
             String pName = String.valueOf(body.getOrDefault("productName", body.get("product_name"))).trim();
-            if (!pName.isEmpty()) doc.setProductName(pName);
+            if (!pName.isEmpty())
+                doc.setProductName(pName);
         }
         if (body.containsKey("category") || body.containsKey("categoryCode")) {
             String cat = String.valueOf(body.getOrDefault("category", body.get("categoryCode"))).trim().toUpperCase();
-            if (!cat.isEmpty()) doc.setCategory(cat);
+            if (!cat.isEmpty())
+                doc.setCategory(cat);
         }
         if (body.containsKey("farmName") || body.containsKey("farmOrigin") || body.containsKey("farm_name")) {
-            String fName = String.valueOf(body.getOrDefault("farmName", body.getOrDefault("farmOrigin", body.get("farm_name")))).trim();
-            if (!fName.isEmpty()) doc.setFarmName(fName);
+            String fName = String
+                    .valueOf(body.getOrDefault("farmName", body.getOrDefault("farmOrigin", body.get("farm_name"))))
+                    .trim();
+            if (!fName.isEmpty())
+                doc.setFarmName(fName);
         }
-        if (body.get("packageCount") instanceof Number pc) doc.setPackageCount(pc.intValue());
-        else if (body.get("package_count") instanceof Number pc2) doc.setPackageCount(pc2.intValue());
+        if (body.get("packageCount") instanceof Number pc)
+            doc.setPackageCount(pc.intValue());
+        else if (body.get("package_count") instanceof Number pc2)
+            doc.setPackageCount(pc2.intValue());
 
-        if (body.get("weightPerPackageKg") instanceof Number wp) doc.setWeightPerPackageKg(wp.doubleValue());
-        else if (body.get("weight_per_package_kg") instanceof Number wp2) doc.setWeightPerPackageKg(wp2.doubleValue());
+        if (body.get("weightPerPackageKg") instanceof Number wp)
+            doc.setWeightPerPackageKg(wp.doubleValue());
+        else if (body.get("weight_per_package_kg") instanceof Number wp2)
+            doc.setWeightPerPackageKg(wp2.doubleValue());
 
-        if (body.containsKey("packageUnit")) doc.setPackageUnit(String.valueOf(body.get("packageUnit")).trim());
-        else if (body.containsKey("package_unit")) doc.setPackageUnit(String.valueOf(body.get("package_unit")).trim());
+        if (body.containsKey("packageUnit"))
+            doc.setPackageUnit(String.valueOf(body.get("packageUnit")).trim());
+        else if (body.containsKey("package_unit"))
+            doc.setPackageUnit(String.valueOf(body.get("package_unit")).trim());
 
         if (body.get("totalWeightKg") instanceof Number tw && tw.doubleValue() > 0) {
             doc.setTotalWeightKg(Math.max(100.0, tw.doubleValue()));
@@ -257,7 +286,8 @@ public class SupplyChainWorkflowController {
             doc.setUnitWeightKg(Math.round((doc.getTotalWeightKg() / units) * 100.0) / 100.0);
         }
         if (body.containsKey("vehiclePlate") || body.containsKey("transportVehiclePlate")) {
-            String plate = String.valueOf(body.getOrDefault("vehiclePlate", body.get("transportVehiclePlate"))).trim().toUpperCase();
+            String plate = String.valueOf(body.getOrDefault("vehiclePlate", body.get("transportVehiclePlate"))).trim()
+                    .toUpperCase();
             doc.getTransportJourney().put("vehicle_plate", plate);
             if (plate.isEmpty()) {
                 doc.getTransportJourney().put("driver_name", "");
@@ -266,7 +296,8 @@ public class SupplyChainWorkflowController {
                 }
             } else {
                 String matchedDriver = userRepository.findAll().stream()
-                        .filter(u -> u.getAssignedEntity() != null && u.getAssignedEntity().toUpperCase().contains(plate))
+                        .filter(u -> u.getAssignedEntity() != null
+                                && u.getAssignedEntity().toUpperCase().contains(plate))
                         .map(com.smartchain.entity.User::getFullName)
                         .findFirst()
                         .orElse(String.valueOf(doc.getTransportJourney().getOrDefault("driver_name", "")));
@@ -284,13 +315,12 @@ public class SupplyChainWorkflowController {
                 "status", "UPDATED",
                 "batchCode", batchCode,
                 "message", "Đã cập nhật thông tin lô hàng " + batchCode + " thành công!",
-                "batch", doc
-        ));
+                "batch", doc));
     }
 
     @PostMapping("/batches/{batchCode}/generate-qr")
     public ResponseEntity<?> generateMoreItemQrs(@PathVariable String batchCode,
-                                                 @RequestBody(required = false) Map<String, Object> body) {
+            @RequestBody(required = false) Map<String, Object> body) {
         Optional<FoodBatchDocument> batchOpt = blockchainService.findBatchByCode(batchCode);
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -306,7 +336,8 @@ public class SupplyChainWorkflowController {
                 ? ((Number) body.get("price")).doubleValue()
                 : (batch.getUnitPrice() != null ? batch.getUnitPrice() : 65000.0);
 
-        List<FoodBatchDocument.ItemQrSerial> newItems = blockchainService.generateItemQrSerials(batchCode, count, weight, price);
+        List<FoodBatchDocument.ItemQrSerial> newItems = blockchainService.generateItemQrSerials(batchCode, count,
+                weight, price);
         blockchainService.saveFoodBatch(batch);
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -320,10 +351,12 @@ public class SupplyChainWorkflowController {
 
     // Phase 2 & 3: Logistics Telemetry & OTA Sync
     @GetMapping("/driver/trips")
-    public ResponseEntity<?> getDriverTrips(@RequestParam(value = "vehiclePlate", required = false) String vehiclePlate) {
+    public ResponseEntity<?> getDriverTrips(
+            @RequestParam(value = "vehiclePlate", required = false) String vehiclePlate) {
         List<FoodBatchDocument> allBatches = blockchainService.findAllBatches();
 
-        boolean filterByPlate = vehiclePlate != null && !vehiclePlate.isEmpty() && !vehiclePlate.equalsIgnoreCase("all");
+        boolean filterByPlate = vehiclePlate != null && !vehiclePlate.isEmpty()
+                && !vehiclePlate.equalsIgnoreCase("all");
 
         FoodBatchDocument activeBatch = allBatches.stream()
                 .filter(b -> {
@@ -332,7 +365,8 @@ public class SupplyChainWorkflowController {
                         return (v.contains(vehiclePlate) || "LOT-VEG-2026-001".equals(b.getBatchCode()))
                                 && !"SOLD".equalsIgnoreCase(b.getStatus());
                     } else {
-                        return "IN_TRANSIT".equalsIgnoreCase(b.getStatus()) || "READY_FOR_PICKUP".equalsIgnoreCase(b.getStatus());
+                        return "IN_TRANSIT".equalsIgnoreCase(b.getStatus())
+                                || "READY_FOR_PICKUP".equalsIgnoreCase(b.getStatus());
                     }
                 })
                 .findFirst()
@@ -340,8 +374,10 @@ public class SupplyChainWorkflowController {
 
         Map<String, Object> activeTrip = new LinkedHashMap<>();
         if (activeBatch != null) {
-            String vPlate = String.valueOf(activeBatch.getTransportJourney().getOrDefault("vehicle_plate", filterByPlate ? vehiclePlate : "49C-567.89"));
-            String dName = String.valueOf(activeBatch.getTransportJourney().getOrDefault("driver_name", "Lê Hoàng Nam"));
+            String vPlate = String.valueOf(activeBatch.getTransportJourney().getOrDefault("vehicle_plate",
+                    filterByPlate ? vehiclePlate : "49C-567.89"));
+            String dName = String
+                    .valueOf(activeBatch.getTransportJourney().getOrDefault("driver_name", "Lê Hoàng Nam"));
             activeTrip.put("batchCode", activeBatch.getBatchCode());
             activeTrip.put("productName", activeBatch.getProductName());
             activeTrip.put("category", activeBatch.getCategory());
@@ -353,8 +389,10 @@ public class SupplyChainWorkflowController {
             activeTrip.put("status", activeBatch.getStatus());
             activeTrip.put("weightKg", activeBatch.getTotalWeightKg() != null ? activeBatch.getTotalWeightKg() : 500.0);
             activeTrip.put("packageCount", activeBatch.getPackageCount() != null ? activeBatch.getPackageCount() : 50);
-            activeTrip.put("weightPerPackageKg", activeBatch.getWeightPerPackageKg() != null ? activeBatch.getWeightPerPackageKg() : 10.0);
-            activeTrip.put("packageUnit", activeBatch.getPackageUnit() != null ? activeBatch.getPackageUnit() : "Thùng tiêu chuẩn");
+            activeTrip.put("weightPerPackageKg",
+                    activeBatch.getWeightPerPackageKg() != null ? activeBatch.getWeightPerPackageKg() : 10.0);
+            activeTrip.put("packageUnit",
+                    activeBatch.getPackageUnit() != null ? activeBatch.getPackageUnit() : "Thùng tiêu chuẩn");
             activeTrip.put("targetTemp", "8.0°C - 12.0°C");
             activeTrip.put("departedAt", activeBatch.getTransportJourney().get("departed_at"));
             activeTrip.put("arrivedAt", activeBatch.getTransportJourney().get("arrived_at"));
@@ -362,21 +400,79 @@ public class SupplyChainWorkflowController {
         }
 
         List<Map<String, Object>> tripHistory = new ArrayList<>(dynamicCompletedTrips);
-        tripHistory.add(createTripRecord("TRIP-VN-2026-904", "LOT-FISH-2026-001", "Cá Hồi Nauy Phi Lê Tươi Sashimi", "Cảng Cát Lái -> Mai Chí Thọ -> Co.opmart Quận 1 (28 km)", "14/11/2026", "03:00", "04:15 - 14/11/2026", 100, 1.2, "DELIVERED", "Hoàn thành bàn giao quầy tươi", "0x5c81de92ab10372ef89100234ac2b012487ef012", "Phạm Tài Xế", "51D-998.12", "Siêu Thị Co.opmart Cống Quỳnh Q1"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-895", "LOT-MEAT-2026-002", "Thịt Thăn Ngoại Bò Wagyu Úc Chilled", "Bến Lức -> Bình Chánh -> Co.opmart Quận 7 (48 km)", "14/11/2026", "04:00", "05:30 - 14/11/2026", 100, 2.1, "DELIVERED", "Hoàn thành bàn giao tủ thịt M2", "0x3e18cf902bb1479fa89012345bc7a102394ef882", "Trần Văn Lái", "62C-334.55", "Siêu Thị Co.opmart Quận 7"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-881", "LOT-DAIRY-2026-005", "Sữa Tươi Thanh Trùng Đà Lạt Milk 100% Nguyên Chất", "Đơn Dương (Lâm Đồng) -> QL20 -> TP.HCM (295 km)", "13/11/2026", "04:30", "10:15 - 13/11/2026", 100, 3.8, "DELIVERED", "Đã hoàn thành chuyến xe", "0x8fa3d492c10b771e8432a9bf88234101eef2a912", "Đặng Quốc Huy", "49C-112.33", "Siêu Thị Co.opmart Quận 7"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-875", "LOT-VEG-2026-000", "Dâu Tây New Zealand Canh Tác Nhà Kính", "Đà Lạt -> Bảo Lộc -> TP.HCM (308 km)", "11/11/2026", "05:00", "11:00 - 11/11/2026", 100, 4.2, "DELIVERED", "Hoàn thành bàn giao siêu thị", "0x4b72ef198a0021cfa593d8492049e382fa0129bc", "Lê Hoàng Nam", "49C-567.89", "Siêu Thị Co.opmart Quận 7"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-860", "LOT-FROZEN-2026-001", "Há Cảo Tôm Thượng Hạng Cấp Đông IQF", "Nhà máy Cầu Tre -> Vành Đai Trong -> Co.opmart Gò Vấp (22 km)", "10/11/2026", "06:00", "06:50 - 10/11/2026", 100, -20.5, "DELIVERED", "Hoàn thành bàn giao tủ đông F1", "0x1a82ef302bb1479ea89012345bc7a102394ef331", "Võ Thành Đạt", "51C-777.99", "Siêu Thị Co.opmart Quang Trung"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-852", "LOT-DELI-2026-006", "Gà Quay Thảo Mộc Nguyên Con Quầy Deli Nóng", "Bếp trung tâm Thuận An -> QL13 -> Co.opmart Huỳnh Tấn Phát (38 km)", "09/11/2026", "09:30", "10:45 - 09/11/2026", 100, 68.5, "DELIVERED", "Hoàn thành bàn giao quầy Deli", "0x9923ccf321948ba57482394ef39029aab12048aa", "Hoàng Gia Bảo", "61C-889.01", "Siêu Thị Co.opmart Huỳnh Tấn Phát"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-845", "LOT-VEG-2026-015", "Cà Chua Beef Hữu Cơ Đơn Dương Lâm Đồng", "Đơn Dương -> Bảo Lộc -> Dầu Giây -> TP.HCM (298 km)", "08/11/2026", "04:45", "10:20 - 08/11/2026", 100, 9.6, "DELIVERED", "Hoàn thành bàn giao kệ rau A1", "0x7d19ac83201948ba57482394ef39029aab120411", "Đặng Quốc Huy", "49C-112.33", "Siêu Thị Co.opmart Quận 7"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-839", "LOT-SEA-2026-016", "Cua Hoàng Đế Alaska Tươi Sống Nhập Khẩu", "Tân Sơn Nhất Cargo -> Hoàng Văn Thụ -> Co.opmart Quận 1 (14 km)", "07/11/2026", "02:30", "03:15 - 07/11/2026", 100, 1.1, "DELIVERED", "Hoàn thành bàn giao bể hải sản", "0x6c28bd74190837ef12983475ab90123847ef9901", "Phạm Tài Xế", "51D-998.12", "Siêu Thị Co.opmart Cống Quỳnh Q1"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-831", "LOT-MEAT-2026-017", "Ức Gà Phi Lê Hữu Cơ VietGAP Bình Phước", "Chơn Thành -> QL13 -> Co.opmart Thủ Đức (85 km)", "06/11/2026", "04:00", "06:10 - 06/11/2026", 100, 1.8, "DELIVERED", "Hoàn thành bàn giao tủ thịt M3", "0x4e91fa82736451bc9081726354ef8901234567ab", "Hoàng Gia Bảo", "61C-889.01", "Siêu Thị Co.opmart Xa Lộ Hà Nội"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-824", "LOT-DAIRY-2026-018", "Sữa Chua Hy Lạp Men Sống Cao Cấp", "Long Thành -> Cao tốc LT-DG -> Co.opmart Quận 3 (42 km)", "05/11/2026", "05:15", "06:30 - 05/11/2026", 100, 3.5, "DELIVERED", "Hoàn thành bàn giao tủ sữa D3", "0x2b73cd9182736455ab192837465ef0192837465c", "Trần Văn Lái", "62C-334.55", "Siêu Thị Co.opmart Nguyễn Đình Chiểu Q3"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-818", "LOT-VEG-2026-021", "Ớt Chuông Đà Lạt 3 Màu GlobalGAP", "Đà Lạt -> QL20 -> Co.opmart Phú Mỹ Hưng (308 km)", "04/11/2026", "05:00", "10:50 - 04/11/2026", 99, 9.4, "DELIVERED", "Hoàn thành bàn giao siêu thị", "0x9a18bc7263548910ef28374651928374ab5612cd", "Lê Hoàng Nam", "49C-567.89", "Siêu Thị Co.opmart Phú Mỹ Hưng"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-810", "LOT-FROZEN-2026-022", "Chả Giò Hải Sản Cấp Đông Xuất Khẩu", "KCN Tân Bình -> Trường Chinh -> Co.opmart Tân Phú (16 km)", "03/11/2026", "06:30", "07:15 - 03/11/2026", 100, -19.8, "DELIVERED", "Hoàn thành bàn giao tủ đông F2", "0x8c27de6152437891ab0192837465ef8910293847", "Võ Thành Đạt", "51C-777.99", "Siêu Thị Co.opmart Tân Phú"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-802", "LOT-VEG-2026-023", "Bông Cải Xanh Baby Đà Lạt Hữu Cơ", "Đà Lạt -> Bảo Lộc -> Dầu Giây -> Co.opmart Quận 7 (308 km)", "02/11/2026", "04:30", "10:25 - 02/11/2026", 100, 8.9, "DELIVERED", "Hoàn thành bàn giao kệ mát A2", "0x3f48ab9182736450cd192837465ef81920394857", "Lê Hoàng Nam", "49C-567.89", "Siêu Thị Co.opmart Quận 7"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-795", "LOT-SEA-2026-024", "Mực Ống Phú Quốc Cấp Đông Tươi", "Rạch Giá -> Cao tốc Trung Lương -> Co.opmart Quận 1 (245 km)", "01/11/2026", "01:30", "06:15 - 01/11/2026", 98, 0.8, "DELIVERED", "Hoàn thành bàn giao quầy hải sản", "0x5d92ef8172635490ab123456789cd0192837465a", "Phạm Tài Xế", "51D-998.12", "Siêu Thị Co.opmart Cống Quỳnh Q1"));
-        tripHistory.add(createTripRecord("TRIP-VN-2026-788", "LOT-MEAT-2026-025", "Sườn Non Heo Mát MEATDeli", "Đức Hòa (Long An) -> Quốc Lộ 1A -> Co.opmart Bình Tân (32 km)", "31/10/2026", "04:15", "05:20 - 31/10/2026", 100, 2.3, "DELIVERED", "Hoàn thành bàn giao tủ thịt M1", "0x1e74bc9283746510ef918273645ab1029384756d", "Trần Văn Lái", "62C-334.55", "Siêu Thị Co.opmart Bình Tân"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-904", "LOT-FISH-2026-001", "Cá Hồi Nauy Phi Lê Tươi Sashimi",
+                "Cảng Cát Lái -> Mai Chí Thọ -> Co.opmart Quận 1 (28 km)", "14/11/2026", "03:00", "04:15 - 14/11/2026",
+                100, 1.2, "DELIVERED", "Hoàn thành bàn giao quầy tươi", "0x5c81de92ab10372ef89100234ac2b012487ef012",
+                "Phạm Tài Xế", "51D-998.12", "Siêu Thị Co.opmart Cống Quỳnh Q1"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-895", "LOT-MEAT-2026-002", "Thịt Thăn Ngoại Bò Wagyu Úc Chilled",
+                "Bến Lức -> Bình Chánh -> Co.opmart Quận 7 (48 km)", "14/11/2026", "04:00", "05:30 - 14/11/2026", 100,
+                2.1, "DELIVERED", "Hoàn thành bàn giao tủ thịt M2", "0x3e18cf902bb1479fa89012345bc7a102394ef882",
+                "Trần Văn Lái", "62C-334.55", "Siêu Thị Co.opmart Quận 7"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-881", "LOT-DAIRY-2026-005",
+                "Sữa Tươi Thanh Trùng Đà Lạt Milk 100% Nguyên Chất", "Đơn Dương (Lâm Đồng) -> QL20 -> TP.HCM (295 km)",
+                "13/11/2026", "04:30", "10:15 - 13/11/2026", 100, 3.8, "DELIVERED", "Đã hoàn thành chuyến xe",
+                "0x8fa3d492c10b771e8432a9bf88234101eef2a912", "Đặng Quốc Huy", "49C-112.33",
+                "Siêu Thị Co.opmart Quận 7"));
+        tripHistory
+                .add(createTripRecord("TRIP-VN-2026-875", "LOT-VEG-2026-000", "Dâu Tây New Zealand Canh Tác Nhà Kính",
+                        "Đà Lạt -> Bảo Lộc -> TP.HCM (308 km)", "11/11/2026", "05:00", "11:00 - 11/11/2026", 100, 4.2,
+                        "DELIVERED", "Hoàn thành bàn giao siêu thị", "0x4b72ef198a0021cfa593d8492049e382fa0129bc",
+                        "Lê Hoàng Nam", "49C-567.89", "Siêu Thị Co.opmart Quận 7"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-860", "LOT-FROZEN-2026-001",
+                "Há Cảo Tôm Thượng Hạng Cấp Đông IQF", "Nhà máy Cầu Tre -> Vành Đai Trong -> Co.opmart Gò Vấp (22 km)",
+                "10/11/2026", "06:00", "06:50 - 10/11/2026", 100, -20.5, "DELIVERED", "Hoàn thành bàn giao tủ đông F1",
+                "0x1a82ef302bb1479ea89012345bc7a102394ef331", "Võ Thành Đạt", "51C-777.99",
+                "Siêu Thị Co.opmart Quang Trung"));
+        tripHistory.add(
+                createTripRecord("TRIP-VN-2026-852", "LOT-DELI-2026-006", "Gà Quay Thảo Mộc Nguyên Con Quầy Deli Nóng",
+                        "Bếp trung tâm Thuận An -> QL13 -> Co.opmart Huỳnh Tấn Phát (38 km)", "09/11/2026", "09:30",
+                        "10:45 - 09/11/2026", 100, 68.5, "DELIVERED", "Hoàn thành bàn giao quầy Deli",
+                        "0x9923ccf321948ba57482394ef39029aab12048aa", "Hoàng Gia Bảo", "61C-889.01",
+                        "Siêu Thị Co.opmart Huỳnh Tấn Phát"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-845", "LOT-VEG-2026-015",
+                "Cà Chua Beef Hữu Cơ Đơn Dương Lâm Đồng", "Đơn Dương -> Bảo Lộc -> Dầu Giây -> TP.HCM (298 km)",
+                "08/11/2026", "04:45", "10:20 - 08/11/2026", 100, 9.6, "DELIVERED", "Hoàn thành bàn giao kệ rau A1",
+                "0x7d19ac83201948ba57482394ef39029aab120411", "Đặng Quốc Huy", "49C-112.33",
+                "Siêu Thị Co.opmart Quận 7"));
+        tripHistory
+                .add(createTripRecord("TRIP-VN-2026-839", "LOT-SEA-2026-016", "Cua Hoàng Đế Alaska Tươi Sống Nhập Khẩu",
+                        "Tân Sơn Nhất Cargo -> Hoàng Văn Thụ -> Co.opmart Quận 1 (14 km)", "07/11/2026", "02:30",
+                        "03:15 - 07/11/2026", 100, 1.1, "DELIVERED", "Hoàn thành bàn giao bể hải sản",
+                        "0x6c28bd74190837ef12983475ab90123847ef9901", "Phạm Tài Xế", "51D-998.12",
+                        "Siêu Thị Co.opmart Cống Quỳnh Q1"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-831", "LOT-MEAT-2026-017",
+                "Ức Gà Phi Lê Hữu Cơ VietGAP Bình Phước", "Chơn Thành -> QL13 -> Co.opmart Thủ Đức (85 km)",
+                "06/11/2026", "04:00", "06:10 - 06/11/2026", 100, 1.8, "DELIVERED", "Hoàn thành bàn giao tủ thịt M3",
+                "0x4e91fa82736451bc9081726354ef8901234567ab", "Hoàng Gia Bảo", "61C-889.01",
+                "Siêu Thị Co.opmart Xa Lộ Hà Nội"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-824", "LOT-DAIRY-2026-018", "Sữa Chua Hy Lạp Men Sống Cao Cấp",
+                "Long Thành -> Cao tốc LT-DG -> Co.opmart Quận 3 (42 km)", "05/11/2026", "05:15", "06:30 - 05/11/2026",
+                100, 3.5, "DELIVERED", "Hoàn thành bàn giao tủ sữa D3", "0x2b73cd9182736455ab192837465ef0192837465c",
+                "Trần Văn Lái", "62C-334.55", "Siêu Thị Co.opmart Nguyễn Đình Chiểu Q3"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-818", "LOT-VEG-2026-021", "Ớt Chuông Đà Lạt 3 Màu GlobalGAP",
+                "Đà Lạt -> QL20 -> Co.opmart Phú Mỹ Hưng (308 km)", "04/11/2026", "05:00", "10:50 - 04/11/2026", 99,
+                9.4, "DELIVERED", "Hoàn thành bàn giao siêu thị", "0x9a18bc7263548910ef28374651928374ab5612cd",
+                "Lê Hoàng Nam", "49C-567.89", "Siêu Thị Co.opmart Phú Mỹ Hưng"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-810", "LOT-FROZEN-2026-022",
+                "Chả Giò Hải Sản Cấp Đông Xuất Khẩu", "KCN Tân Bình -> Trường Chinh -> Co.opmart Tân Phú (16 km)",
+                "03/11/2026", "06:30", "07:15 - 03/11/2026", 100, -19.8, "DELIVERED", "Hoàn thành bàn giao tủ đông F2",
+                "0x8c27de6152437891ab0192837465ef8910293847", "Võ Thành Đạt", "51C-777.99",
+                "Siêu Thị Co.opmart Tân Phú"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-802", "LOT-VEG-2026-023", "Bông Cải Xanh Baby Đà Lạt Hữu Cơ",
+                "Đà Lạt -> Bảo Lộc -> Dầu Giây -> Co.opmart Quận 7 (308 km)", "02/11/2026", "04:30",
+                "10:25 - 02/11/2026", 100, 8.9, "DELIVERED", "Hoàn thành bàn giao kệ mát A2",
+                "0x3f48ab9182736450cd192837465ef81920394857", "Lê Hoàng Nam", "49C-567.89",
+                "Siêu Thị Co.opmart Quận 7"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-795", "LOT-SEA-2026-024", "Mực Ống Phú Quốc Cấp Đông Tươi",
+                "Rạch Giá -> Cao tốc Trung Lương -> Co.opmart Quận 1 (245 km)", "01/11/2026", "01:30",
+                "06:15 - 01/11/2026", 98, 0.8, "DELIVERED", "Hoàn thành bàn giao quầy hải sản",
+                "0x5d92ef8172635490ab123456789cd0192837465a", "Phạm Tài Xế", "51D-998.12",
+                "Siêu Thị Co.opmart Cống Quỳnh Q1"));
+        tripHistory.add(createTripRecord("TRIP-VN-2026-788", "LOT-MEAT-2026-025", "Sườn Non Heo Mát MEATDeli",
+                "Đức Hòa (Long An) -> Quốc Lộ 1A -> Co.opmart Bình Tân (32 km)", "31/10/2026", "04:15",
+                "05:20 - 31/10/2026", 100, 2.3, "DELIVERED", "Hoàn thành bàn giao tủ thịt M1",
+                "0x1e74bc9283746510ef918273645ab1029384756d", "Trần Văn Lái", "62C-334.55",
+                "Siêu Thị Co.opmart Bình Tân"));
 
         if (filterByPlate) {
             final String plate = vehiclePlate.trim();
@@ -388,12 +484,12 @@ public class SupplyChainWorkflowController {
         return ResponseEntity.ok(Map.of(
                 "vehiclePlate", vehiclePlate != null ? vehiclePlate : "ALL",
                 "activeTrip", activeTrip,
-                "tripHistory", tripHistory
-        ));
+                "tripHistory", tripHistory));
     }
 
     private String resolveBatchRoute(FoodBatchDocument batch) {
-        if (batch == null) return "Đà Lạt (Lâm Đồng) -> QL20 -> Bảo Lộc -> Dầu Giây -> TP.HCM (308 km)";
+        if (batch == null)
+            return "Đà Lạt (Lâm Đồng) -> QL20 -> Bảo Lộc -> Dầu Giây -> TP.HCM (308 km)";
         String code = batch.getBatchCode() != null ? batch.getBatchCode().toUpperCase() : "";
         String cat = batch.getCategory() != null ? batch.getCategory().toUpperCase() : "";
         String name = batch.getProductName() != null ? batch.getProductName().toLowerCase() : "";
@@ -404,18 +500,20 @@ public class SupplyChainWorkflowController {
             return "Bến Lức (Long An) -> Bình Chánh -> Co.opmart Quận 7 (48 km)";
         } else if (code.contains("DAIRY") || cat.contains("DAIRY") || name.contains("sữa")) {
             return "Đơn Dương (Lâm Đồng) -> Đèo Chuối -> TP.HCM (295 km)";
-        } else if (code.contains("FROZEN") || cat.contains("FROZEN") || name.contains("đông lạnh") || name.contains("cảo")) {
+        } else if (code.contains("FROZEN") || cat.contains("FROZEN") || name.contains("đông lạnh")
+                || name.contains("cảo")) {
             return "Nhà máy Cầu Tre (Tân Phú) -> Co.opmart Gò Vấp (22 km)";
-        } else if (code.contains("DELI") || cat.contains("COOKED") || name.contains("gà quay") || name.contains("chế biến")) {
+        } else if (code.contains("DELI") || cat.contains("COOKED") || name.contains("gà quay")
+                || name.contains("chế biến")) {
             return "Bếp trung tâm Thuận An -> Đại lộ Bình Dương -> Co.opmart Huỳnh Tấn Phát (38 km)";
         }
         return "Đà Lạt (Lâm Đồng) -> QL20 -> Bảo Lộc -> Dầu Giây -> TP.HCM (308 km)";
     }
 
     private Map<String, Object> createTripRecord(String tripId, String batchCode, String productName, String route,
-                                                 String date, String departureTime, String arrivalTime, int complianceScore,
-                                                 double avgTemp, String status, String statusText, String blockchainHash,
-                                                 String driverName, String vehiclePlate, String supermarket) {
+            String date, String departureTime, String arrivalTime, int complianceScore,
+            double avgTemp, String status, String statusText, String blockchainHash,
+            String driverName, String vehiclePlate, String supermarket) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("tripId", tripId);
         map.put("batchCode", batchCode);
@@ -436,9 +534,11 @@ public class SupplyChainWorkflowController {
     }
 
     private Map<String, Object> createTripRecord(String tripId, String batchCode, String productName, String route,
-                                                 String date, String departureTime, String arrivalTime, int complianceScore,
-                                                 double avgTemp, String status, String statusText, String blockchainHash) {
-        return createTripRecord(tripId, batchCode, productName, route, date, departureTime, arrivalTime, complianceScore, avgTemp, status, statusText, blockchainHash, "Lê Hoàng Nam", "49C-567.89", "Siêu Thị Co.opmart Quận 7");
+            String date, String departureTime, String arrivalTime, int complianceScore,
+            double avgTemp, String status, String statusText, String blockchainHash) {
+        return createTripRecord(tripId, batchCode, productName, route, date, departureTime, arrivalTime,
+                complianceScore, avgTemp, status, statusText, blockchainHash, "Lê Hoàng Nam", "49C-567.89",
+                "Siêu Thị Co.opmart Quận 7");
     }
 
     @PostMapping("/driver/start-trip")
@@ -447,19 +547,26 @@ public class SupplyChainWorkflowController {
         String vehiclePlate = body.getOrDefault("vehiclePlate", "49C-567.89");
         String driverName = body.getOrDefault("driverName", "Lê Hoàng Nam");
 
-        // Kiểm tra quy tắc đơn nhiệm: 1 tài xế / 1 phương tiện chỉ được chở 1 lô hàng cùng lúc
-        // Hai tài xế khác nhau trên hai phương tiện khác nhau hoàn toàn được phép chạy song song độc lập
+        // Kiểm tra quy tắc đơn nhiệm: 1 tài xế / 1 phương tiện chỉ được chở 1 lô hàng
+        // cùng lúc
+        // Hai tài xế khác nhau trên hai phương tiện khác nhau hoàn toàn được phép chạy
+        // song song độc lập
         List<FoodBatchDocument> allBatches = blockchainService.findAllBatches();
         final String targetPlate = vehiclePlate != null ? vehiclePlate.trim().toUpperCase() : "";
         final String targetDriver = driverName != null ? driverName.trim().toLowerCase() : "";
 
         Optional<FoodBatchDocument> alreadyRunning = allBatches.stream()
-                .filter(b -> "IN_TRANSIT".equalsIgnoreCase(b.getStatus()) && !batchCode.equalsIgnoreCase(b.getBatchCode()))
+                .filter(b -> "IN_TRANSIT".equalsIgnoreCase(b.getStatus())
+                        && !batchCode.equalsIgnoreCase(b.getBatchCode()))
                 .filter(b -> {
-                    String v = String.valueOf(b.getTransportJourney().getOrDefault("vehicle_plate", "")).trim().toUpperCase();
-                    String d = String.valueOf(b.getTransportJourney().getOrDefault("driver_name", "")).trim().toLowerCase();
-                    boolean matchVehicle = !targetPlate.isEmpty() && !v.isEmpty() && (v.equals(targetPlate) || targetPlate.contains(v) || v.contains(targetPlate));
-                    boolean matchDriver = !targetDriver.isEmpty() && !d.isEmpty() && (d.contains(targetDriver) || targetDriver.contains(d));
+                    String v = String.valueOf(b.getTransportJourney().getOrDefault("vehicle_plate", "")).trim()
+                            .toUpperCase();
+                    String d = String.valueOf(b.getTransportJourney().getOrDefault("driver_name", "")).trim()
+                            .toLowerCase();
+                    boolean matchVehicle = !targetPlate.isEmpty() && !v.isEmpty()
+                            && (v.equals(targetPlate) || targetPlate.contains(v) || v.contains(targetPlate));
+                    boolean matchDriver = !targetDriver.isEmpty() && !d.isEmpty()
+                            && (d.contains(targetDriver) || targetDriver.contains(d));
                     return matchVehicle || matchDriver;
                 })
                 .findFirst();
@@ -467,9 +574,11 @@ public class SupplyChainWorkflowController {
         if (alreadyRunning.isPresent()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "DRIVER_CONCURRENCY_VIOLATION",
-                    "message", "Phương tiện / Tài xế đang vận chuyển lô hàng " + alreadyRunning.get().getBatchCode() + " (" + alreadyRunning.get().getProductName() + "). Phải hoàn thành chuyến xe hiện tại trước khi bắt đầu chở lô tiếp theo trong hàng đợi!",
-                    "activeBatchCode", alreadyRunning.get().getBatchCode()
-            ));
+                    "message",
+                    "Phương tiện / Tài xế đang vận chuyển lô hàng " + alreadyRunning.get().getBatchCode() + " ("
+                            + alreadyRunning.get().getProductName()
+                            + "). Phải hoàn thành chuyến xe hiện tại trước khi bắt đầu chở lô tiếp theo trong hàng đợi!",
+                    "activeBatchCode", alreadyRunning.get().getBatchCode()));
         }
 
         Optional<FoodBatchDocument> batchOpt = blockchainService.findBatchByCode(batchCode);
@@ -499,13 +608,12 @@ public class SupplyChainWorkflowController {
                         "action", "TRUCK_DEPARTED",
                         "route", resolvedRoute,
                         "departedAt", Instant.now().toString(),
-                        "telemetryActive", true
-                ),
-                cassandraService.buildMerkleLeavesForBatch(batchCode)
-        );
+                        "telemetryActive", true),
+                cassandraService.buildMerkleLeavesForBatch(batchCode));
 
         try {
-            mqttService.syncDynamicProfileToEsp32(batchCode, batch.getCategory(), vehiclePlate, "ESP32-MULTI-01", batch.getProductName());
+            mqttService.syncDynamicProfileToEsp32(batchCode, batch.getCategory(), vehiclePlate, "ESP32-MULTI-01",
+                    batch.getProductName());
         } catch (Exception e) {
             // MQTT optional
         }
@@ -516,8 +624,7 @@ public class SupplyChainWorkflowController {
                 "event", "DRIVER_DEPARTED",
                 "vehiclePlate", vehiclePlate,
                 "driverName", driverName,
-                "timestamp", Instant.now().toString()
-        );
+                "timestamp", Instant.now().toString());
         messagingTemplate.convertAndSend("/topic/batch-status", wsPayload);
 
         return ResponseEntity.ok(Map.of(
@@ -525,8 +632,7 @@ public class SupplyChainWorkflowController {
                 "batchCode", batchCode,
                 "message", "Chuyến xe đã khởi hành! Dữ liệu giám sát chuỗi lạnh bắt đầu kích hoạt.",
                 "block", block,
-                "batch", batch
-        ));
+                "batch", batch));
     }
 
     @PostMapping("/driver/complete-trip")
@@ -541,7 +647,12 @@ public class SupplyChainWorkflowController {
         }
 
         FoodBatchDocument batch = batchOpt.get();
-        batch.setStatus("ARRIVED_AT_STORE");
+        // Không ghi đè lùi trạng thái nếu lô hàng đã được KCS nghiệm thu hoặc đã lên kệ
+        String prevSt = batch.getStatus() != null ? batch.getStatus().trim().toUpperCase() : "";
+        if (!"QC_ACCEPTED".equals(prevSt) && !"ON_SHELF".equals(prevSt) && !"SOLD".equals(prevSt)
+                && !"RECALLED".equals(prevSt)) {
+            batch.setStatus("ARRIVED_AT_STORE");
+        }
         batch.getTransportJourney().put("arrived_at", Instant.now().toString());
         batch.getTransportJourney().put("destination_store", supermarket);
         batch.getTransportJourney().put("status", "ARRIVED_AT_STORE");
@@ -555,10 +666,8 @@ public class SupplyChainWorkflowController {
                 Map.of(
                         "action", "ARRIVED_AT_SUPERMARKET",
                         "supermarket", supermarket,
-                        "arrivedAt", Instant.now().toString()
-                ),
-                cassandraService.buildMerkleLeavesForBatch(batchCode)
-        );
+                        "arrivedAt", Instant.now().toString()),
+                cassandraService.buildMerkleLeavesForBatch(batchCode));
 
         String vehiclePlate = String.valueOf(batch.getTransportJourney().getOrDefault("vehicle_plate", "49C-567.89"));
         try {
@@ -580,15 +689,15 @@ public class SupplyChainWorkflowController {
                 100,
                 9.5,
                 "DELIVERED",
-                "Đã hoàn thành chuyến xe",
+                "Đã đến cổng kho tiếp nhận, chờ KCS kiểm định",
                 block.getCurrentHash(),
                 driverName,
                 vehiclePlate,
-                supermarket
-        );
+                supermarket);
         dynamicCompletedTrips.add(0, savedTrip);
 
-        // Đưa thiết bị IoT ESP32 về trạng thái STANDBY (tắt relay, tắt chuông, hiện màn hình chờ)
+        // Đưa thiết bị IoT ESP32 về trạng thái STANDBY (tắt relay, tắt chuông, hiện màn
+        // hình chờ)
         try {
             mqttService.resetEsp32ToStandby("ESP32-MULTI-01");
         } catch (Exception ignored) {
@@ -596,21 +705,19 @@ public class SupplyChainWorkflowController {
 
         messagingTemplate.convertAndSend("/topic/batch-status", Map.of(
                 "batchCode", batchCode,
-                "status", "ARRIVED_AT_STORE",
+                "status", batch.getStatus(),
                 "event", "DRIVER_ARRIVED",
                 "supermarket", supermarket,
-                "timestamp", Instant.now().toString()
-        ));
+                "timestamp", Instant.now().toString()));
 
         return ResponseEntity.ok(Map.of(
-                "status", "ARRIVED_AT_STORE",
+                "status", batch.getStatus(),
                 "batchCode", batchCode,
-                "message", "Chuyến xe đã đến nơi và bàn giao thành công!",
+                "message", "Xe lạnh đã đến cổng kho tiếp nhận an toàn! Đang chờ kiểm định viên KCS nghiệm thu chất lượng.",
                 "block", block,
                 "batch", batch,
                 "completedTrip", savedTrip,
-                "tripHistory", dynamicCompletedTrips
-        ));
+                "tripHistory", dynamicCompletedTrips));
     }
 
     @PostMapping("/driver/reset-trip")
@@ -637,13 +744,11 @@ public class SupplyChainWorkflowController {
         messagingTemplate.convertAndSend("/topic/batch-status", Map.of(
                 "batchCode", batchCode,
                 "status", "READY_FOR_PICKUP",
-                "event", "DRIVER_RESET"
-        ));
+                "event", "DRIVER_RESET"));
         return ResponseEntity.ok(Map.of(
                 "status", "READY_FOR_PICKUP",
                 "batchCode", batchCode,
-                "message", "Đã đặt lại trạng thái chờ khởi hành"
-        ));
+                "message", "Đã đặt lại trạng thái chờ khởi hành"));
     }
 
     // Driver Assignment & Sensor Operations
@@ -657,8 +762,7 @@ public class SupplyChainWorkflowController {
         if (batchCode.isEmpty() || (driverName.isEmpty() && vehiclePlate.isEmpty())) {
             return ResponseEntity.badRequest().body(Map.of(
                     "status", "ERROR",
-                    "message", "Vui lòng chọn lô hàng và tài xế cần giao!"
-            ));
+                    "message", "Vui lòng chọn lô hàng và tài xế cần giao!"));
         }
 
         Optional<FoodBatchDocument> batchOpt = blockchainService.findBatchByCode(batchCode);
@@ -676,8 +780,10 @@ public class SupplyChainWorkflowController {
                     return "ASSIGNED_PENDING".equals(st) || "READY_FOR_PICKUP".equals(st) || "IN_TRANSIT".equals(st);
                 })
                 .filter(b -> {
-                    String v = String.valueOf(b.getTransportJourney().getOrDefault("vehicle_plate", "")).trim().toUpperCase();
-                    String d = String.valueOf(b.getTransportJourney().getOrDefault("driver_name", "")).trim().toLowerCase();
+                    String v = String.valueOf(b.getTransportJourney().getOrDefault("vehicle_plate", "")).trim()
+                            .toUpperCase();
+                    String d = String.valueOf(b.getTransportJourney().getOrDefault("driver_name", "")).trim()
+                            .toLowerCase();
                     boolean matchPlate = !vehiclePlate.isEmpty() && !v.isEmpty() && v.equals(vehiclePlate);
                     boolean matchDriver = !driverName.isEmpty() && !d.isEmpty() && d.equalsIgnoreCase(driverName);
                     return matchPlate || matchDriver;
@@ -688,8 +794,8 @@ public class SupplyChainWorkflowController {
             return ResponseEntity.badRequest().body(Map.of(
                     "status", "ERROR",
                     "error", "DRIVER_QUEUE_FULL",
-                    "message", "Tài xế " + driverName + " (" + vehiclePlate + ") đã có tối đa 3 lô hàng trong danh sách chờ/vận chuyển! Không thể giao thêm."
-            ));
+                    "message", "Tài xế " + driverName + " (" + vehiclePlate
+                            + ") đã có tối đa 3 lô hàng trong danh sách chờ/vận chuyển! Không thể giao thêm."));
         }
 
         batch.setStatus("ASSIGNED_PENDING");
@@ -714,9 +820,10 @@ public class SupplyChainWorkflowController {
                 "batchCode", batchCode,
                 "driverName", driverName,
                 "vehiclePlate", vehiclePlate,
-                "message", "Đã giao lô hàng " + batchCode + " cho tài xế " + driverName + " (" + vehiclePlate + "). Đang chờ tài xế xác nhận nhận lô!",
-                "batch", batch
-        ));
+                "message",
+                "Đã giao lô hàng " + batchCode + " cho tài xế " + driverName + " (" + vehiclePlate
+                        + "). Đang chờ tài xế xác nhận nhận lô!",
+                "batch", batch));
     }
 
     @PostMapping("/driver/revoke-batch")
@@ -730,8 +837,7 @@ public class SupplyChainWorkflowController {
         if ("IN_TRANSIT".equalsIgnoreCase(batch.getStatus())) {
             return ResponseEntity.badRequest().body(Map.of(
                     "status", "ERROR",
-                    "message", "Không thể thu hồi phân công khi chuyến xe đang di chuyển trên đường!"
-            ));
+                    "message", "Không thể thu hồi phân công khi chuyến xe đang di chuyển trên đường!"));
         }
 
         String oldDriver = String.valueOf(batch.getTransportJourney().getOrDefault("driver_name", ""));
@@ -748,15 +854,15 @@ public class SupplyChainWorkflowController {
                 "event", "BATCH_REVOKED",
                 "driverName", "",
                 "vehiclePlate", "",
-                "timestamp", Instant.now().toString()
-        ));
+                "timestamp", Instant.now().toString()));
 
         return ResponseEntity.ok(Map.of(
                 "status", "CREATED",
                 "batchCode", batchCode,
-                "message", "Đã thu hồi phân công lô hàng " + batchCode + " khỏi tài xế " + oldDriver + ". Lô hàng đã trở về kho chờ điều phối!",
-                "batch", batch
-        ));
+                "message",
+                "Đã thu hồi phân công lô hàng " + batchCode + " khỏi tài xế " + oldDriver
+                        + ". Lô hàng đã trở về kho chờ điều phối!",
+                "batch", batch));
     }
 
     @PostMapping("/driver/respond-batch")
@@ -786,15 +892,15 @@ public class SupplyChainWorkflowController {
                     "event", "DRIVER_REJECTED_BATCH",
                     "driverName", driverName,
                     "vehiclePlate", vehiclePlate,
-                    "timestamp", Instant.now().toString()
-            ));
+                    "timestamp", Instant.now().toString()));
 
             return ResponseEntity.ok(Map.of(
                     "status", "CREATED",
                     "batchCode", batchCode,
-                    "message", "Đã từ chối nhận lô hàng " + batchCode + ". Lô hàng đã được trả về danh sách chờ điều phối của Quản trị viên.",
-                    "batch", batch
-            ));
+                    "message",
+                    "Đã từ chối nhận lô hàng " + batchCode
+                            + ". Lô hàng đã được trả về danh sách chờ điều phối của Quản trị viên.",
+                    "batch", batch));
         }
 
         // Nếu ACCEPT: Kiểm tra giới hạn tối đa 3 lô trong hàng đợi của tài xế
@@ -806,8 +912,10 @@ public class SupplyChainWorkflowController {
                     return "READY_FOR_PICKUP".equals(st) || "IN_TRANSIT".equals(st);
                 })
                 .filter(b -> {
-                    String v = String.valueOf(b.getTransportJourney().getOrDefault("vehicle_plate", "")).trim().toUpperCase();
-                    String d = String.valueOf(b.getTransportJourney().getOrDefault("driver_name", "")).trim().toLowerCase();
+                    String v = String.valueOf(b.getTransportJourney().getOrDefault("vehicle_plate", "")).trim()
+                            .toUpperCase();
+                    String d = String.valueOf(b.getTransportJourney().getOrDefault("driver_name", "")).trim()
+                            .toLowerCase();
                     return (!vehiclePlate.isEmpty() && v.equals(vehiclePlate))
                             || (!driverName.isEmpty() && d.equalsIgnoreCase(driverName));
                 })
@@ -817,13 +925,15 @@ public class SupplyChainWorkflowController {
             return ResponseEntity.badRequest().body(Map.of(
                     "status", "ERROR",
                     "error", "DRIVER_QUEUE_FULL",
-                    "message", "Bạn chỉ được nhận tối đa 3 lô hàng vào hàng đợi vận chuyển! Vui lòng hoàn thành bớt chuyến trước khi nhận thêm."
-            ));
+                    "message",
+                    "Bạn chỉ được nhận tối đa 3 lô hàng vào hàng đợi vận chuyển! Vui lòng hoàn thành bớt chuyến trước khi nhận thêm."));
         }
 
         batch.setStatus("READY_FOR_PICKUP");
-        if (!driverName.isEmpty()) batch.getTransportJourney().put("driver_name", driverName);
-        if (!vehiclePlate.isEmpty()) batch.getTransportJourney().put("vehicle_plate", vehiclePlate);
+        if (!driverName.isEmpty())
+            batch.getTransportJourney().put("driver_name", driverName);
+        if (!vehiclePlate.isEmpty())
+            batch.getTransportJourney().put("vehicle_plate", vehiclePlate);
         batch.getTransportJourney().put("status", "READY_FOR_PICKUP");
         batch.getTransportJourney().put("loading_confirmed", false);
         batch.getTransportJourney().put("door_open", false);
@@ -837,15 +947,13 @@ public class SupplyChainWorkflowController {
                 "event", "DRIVER_ACCEPTED_BATCH",
                 "driverName", String.valueOf(batch.getTransportJourney().getOrDefault("driver_name", driverName)),
                 "vehiclePlate", String.valueOf(batch.getTransportJourney().getOrDefault("vehicle_plate", vehiclePlate)),
-                "timestamp", Instant.now().toString()
-        ));
+                "timestamp", Instant.now().toString()));
 
         return ResponseEntity.ok(Map.of(
                 "status", "READY_FOR_PICKUP",
                 "batchCode", batchCode,
                 "message", "Đã tiếp nhận thành công lô hàng " + batchCode + " vào hàng đợi vận chuyển!",
-                "batch", batch
-        ));
+                "batch", batch));
     }
 
     @PostMapping("/driver/request-door-open")
@@ -880,9 +988,9 @@ public class SupplyChainWorkflowController {
         return ResponseEntity.ok(Map.of(
                 "status", "PENDING",
                 "batchCode", batchCode,
-                "message", "Đã gửi yêu cầu xin mở cửa thùng xe kèm lý do đến Quản trị viên (Admin). Vui lòng chờ phê duyệt!",
-                "batch", batch
-        ));
+                "message",
+                "Đã gửi yêu cầu xin mở cửa thùng xe kèm lý do đến Quản trị viên (Admin). Vui lòng chờ phê duyệt!",
+                "batch", batch));
     }
 
     @PostMapping("/driver/approve-door-open")
@@ -916,8 +1024,7 @@ public class SupplyChainWorkflowController {
                 "message", "APPROVED".equals(decision)
                         ? "Đã phê duyệt cho phép tài xế mở cửa thùng xe lô " + batchCode + "!"
                         : "Đã từ chối yêu cầu mở cửa thùng xe lô " + batchCode + "!",
-                "batch", batch
-        ));
+                "batch", batch));
     }
 
     @PostMapping("/driver/open-door")
@@ -953,8 +1060,7 @@ public class SupplyChainWorkflowController {
                     "event", "DOOR_CLOSED",
                     "doorOpen", false,
                     "doorLockedAfterDelivery", isDeliveredBatch,
-                    "timestamp", Instant.now().toString()
-            ));
+                    "timestamp", Instant.now().toString()));
             return ResponseEntity.ok(Map.of(
                     "status", "DOOR_CLOSED",
                     "doorOpen", false,
@@ -962,8 +1068,7 @@ public class SupplyChainWorkflowController {
                     "message", isDeliveredBatch
                             ? "Đã đóng cửa thùng xe sau bàn giao! Cửa thùng xe đã khóa an toàn cho đến khi chọn lô tiếp theo."
                             : "Đã đóng khóa bảo mật cửa thùng xe lạnh.",
-                    "batch", batch
-            ));
+                    "batch", batch));
         }
 
         // BƯỚC 1 TRƯỚC KHI XUẤT BẾN: Mở cửa thùng xe tại kho để bốc hàng lên xe
@@ -976,18 +1081,18 @@ public class SupplyChainWorkflowController {
                     "status", batch.getStatus(),
                     "event", "DOOR_OPENED_FOR_LOADING",
                     "doorOpen", true,
-                    "timestamp", Instant.now().toString()
-            ));
+                    "timestamp", Instant.now().toString()));
             return ResponseEntity.ok(Map.of(
                     "status", "DOOR_OPENED_FOR_LOADING",
                     "doorOpen", true,
                     "loadingConfirmed", false,
-                    "message", "Đã mở cửa thùng xe tại điểm tập kết! Vui lòng kiểm tra bốc hàng và bấm Xác nhận vận chuyển lô hàng & Đóng cửa thùng xe.",
-                    "batch", batch
-            ));
+                    "message",
+                    "Đã mở cửa thùng xe tại điểm tập kết! Vui lòng kiểm tra bốc hàng và bấm Xác nhận vận chuyển lô hàng & Đóng cửa thùng xe.",
+                    "batch", batch));
         }
 
-        // BƯỚC 2 TRƯỚC KHI XUẤT BẾN: Xác nhận đã bốc lô hàng lên xe & đóng kín cửa niêm phong để mở khóa nút Bắt đầu chuyến xe
+        // BƯỚC 2 TRƯỚC KHI XUẤT BẾN: Xác nhận đã bốc lô hàng lên xe & đóng kín cửa niêm
+        // phong để mở khóa nút Bắt đầu chuyến xe
         if ("CONFIRM_LOADING_AND_CLOSE".equals(action)) {
             batch.getTransportJourney().put("door_open", false);
             batch.getTransportJourney().put("loading_confirmed", true);
@@ -997,10 +1102,12 @@ public class SupplyChainWorkflowController {
                 mqttService.syncDynamicProfileToEsp32(
                         batchCode,
                         batch.getCategory(),
-                        vehiclePlate.isEmpty() ? String.valueOf(batch.getTransportJourney().getOrDefault("vehicle_plate", "49C-567.89")) : vehiclePlate,
+                        vehiclePlate.isEmpty()
+                                ? String.valueOf(
+                                        batch.getTransportJourney().getOrDefault("vehicle_plate", "49C-567.89"))
+                                : vehiclePlate,
                         "ESP32-MULTI-01",
-                        batch.getProductName()
-                );
+                        batch.getProductName());
             } catch (Exception ignored) {
             }
 
@@ -1010,24 +1117,25 @@ public class SupplyChainWorkflowController {
                     "event", "LOADING_CONFIRMED_DOOR_CLOSED",
                     "doorOpen", false,
                     "loadingConfirmed", true,
-                    "timestamp", Instant.now().toString()
-            ));
+                    "timestamp", Instant.now().toString()));
             return ResponseEntity.ok(Map.of(
                     "status", "LOADING_CONFIRMED",
                     "doorOpen", false,
                     "loadingConfirmed", true,
-                    "message", "Đã xác nhận bốc lô hàng " + batchCode + " lên xe, đồng bộ cấu hình thiết bị IoT và đóng niêm phong cửa thùng xe! Bạn có thể bấm Bắt đầu chuyến xe.",
-                    "batch", batch
-            ));
+                    "message",
+                    "Đã xác nhận bốc lô hàng " + batchCode
+                            + " lên xe, đồng bộ cấu hình thiết bị IoT và đóng niêm phong cửa thùng xe! Bạn có thể bấm Bắt đầu chuyến xe.",
+                    "batch", batch));
         }
 
-        // Nếu lô hàng đã bàn giao và đã đóng cửa -> Khóa không cho mở lại nữa cho tới khi chọn lô tiếp theo!
+        // Nếu lô hàng đã bàn giao và đã đóng cửa -> Khóa không cho mở lại nữa cho tới
+        // khi chọn lô tiếp theo!
         if (isDeliveredBatch && (Boolean.TRUE.equals(batch.getTransportJourney().get("door_locked_after_delivery"))
                 || !Boolean.TRUE.equals(batch.getTransportJourney().get("door_open")))) {
             return ResponseEntity.badRequest().body(Map.of(
                     "status", "DOOR_LOCKED_AFTER_DELIVERY",
-                    "message", "Lô hàng đã được bàn giao và đóng cửa thùng xe! Bạn không thể mở lại cửa thùng xe cho tới khi chọn lô hàng tiếp theo."
-            ));
+                    "message",
+                    "Lô hàng đã được bàn giao và đóng cửa thùng xe! Bạn không thể mở lại cửa thùng xe cho tới khi chọn lô hàng tiếp theo."));
         }
 
         String requestStatus = String.valueOf(batch.getTransportJourney().getOrDefault("door_request_status", "NONE"));
@@ -1044,15 +1152,13 @@ public class SupplyChainWorkflowController {
                     "doorOpen", true,
                     "driverName", driverName,
                     "vehiclePlate", vehiclePlate,
-                    "timestamp", Instant.now().toString()
-            ));
+                    "timestamp", Instant.now().toString()));
             return ResponseEntity.ok(Map.of(
                     "status", "DOOR_OPENED_SAFE",
                     "doorOpen", true,
                     "unauthorized", false,
                     "message", "Đã mở cửa thùng xe tại điểm đích để bốc dỡ & bàn giao lô hàng!",
-                    "batch", batch
-            ));
+                    "batch", batch));
         }
 
         if (isApproved) {
@@ -1063,18 +1169,17 @@ public class SupplyChainWorkflowController {
                     "doorOpen", true,
                     "driverName", driverName,
                     "vehiclePlate", vehiclePlate,
-                    "timestamp", Instant.now().toString()
-            ));
+                    "timestamp", Instant.now().toString()));
             return ResponseEntity.ok(Map.of(
                     "status", "DOOR_OPENED_APPROVED",
                     "doorOpen", true,
                     "unauthorized", false,
                     "message", "Đã mở cửa thùng xe theo lệnh phê duyệt khẩn cấp của Quản trị viên.",
-                    "batch", batch
-            ));
+                    "batch", batch));
         }
 
-        // TRƯỜNG HỢP MỞ CỬA KHI CHƯA ĐẾN NƠI VÀ CHƯA ĐƯỢC ADMIN PHÊ DUYỆT -> PHÁT CẢNH BÁO ĐỎ KHẨN CẤP!
+        // TRƯỜNG HỢP MỞ CỬA KHI CHƯA ĐẾN NƠI VÀ CHƯA ĐƯỢC ADMIN PHÊ DUYỆT -> PHÁT CẢNH
+        // BÁO ĐỎ KHẨN CẤP!
         if (forceOpen) {
             blockchainService.mintBlock(
                     batchCode,
@@ -1085,10 +1190,8 @@ public class SupplyChainWorkflowController {
                             "alert", "CẢNH BÁO MỞ CỬA THÙNG XE TRÁI PHÉP KHI CHƯA TỚI ĐÍCH",
                             "driverName", driverName,
                             "vehiclePlate", vehiclePlate,
-                            "timestamp", Instant.now().toString()
-                    ),
-                    cassandraService.buildMerkleLeavesForBatch(batchCode)
-            );
+                            "timestamp", Instant.now().toString()),
+                    cassandraService.buildMerkleLeavesForBatch(batchCode));
 
             Map<String, Object> alertPayload = new LinkedHashMap<>();
             alertPayload.put("batchCode", batchCode);
@@ -1097,7 +1200,9 @@ public class SupplyChainWorkflowController {
             alertPayload.put("doorOpen", true);
             alertPayload.put("driverName", driverName);
             alertPayload.put("vehiclePlate", vehiclePlate);
-            alertPayload.put("message", "CẢNH BÁO KHẨN CẤP: Tài xế " + driverName + " (" + vehiclePlate + ") đã tự ý mở cửa thùng xe lô " + batchCode + " khi chưa tới điểm đích và chưa có lệnh phê duyệt của Admin!");
+            alertPayload.put("message",
+                    "CẢNH BÁO KHẨN CẤP: Tài xế " + driverName + " (" + vehiclePlate + ") đã tự ý mở cửa thùng xe lô "
+                            + batchCode + " khi chưa tới điểm đích và chưa có lệnh phê duyệt của Admin!");
             alertPayload.put("timestamp", Instant.now().toString());
 
             messagingTemplate.convertAndSend("/topic/batch-status", alertPayload);
@@ -1107,15 +1212,14 @@ public class SupplyChainWorkflowController {
                     "status", "UNAUTHORIZED_DOOR_OPEN",
                     "doorOpen", true,
                     "unauthorized", true,
-                    "message", "CẢNH BÁO VI PHẠM AN NINH CHUỖI LẠNH: Đã ghi nhận hành vi mở cửa thùng xe khi chưa được phép và gửi báo động khẩn cấp đến Admin!",
-                    "batch", batch
-            ));
+                    "message",
+                    "CẢNH BÁO VI PHẠM AN NINH CHUỖI LẠNH: Đã ghi nhận hành vi mở cửa thùng xe khi chưa được phép và gửi báo động khẩn cấp đến Admin!",
+                    "batch", batch));
         }
 
         return ResponseEntity.badRequest().body(Map.of(
                 "status", "CONFIRMATION_REQUIRED",
-                "message", "Xe chưa đến điểm đích và chưa có lệnh phê duyệt của Admin!"
-        ));
+                "message", "Xe chưa đến điểm đích và chưa có lệnh phê duyệt của Admin!"));
     }
 
     @PostMapping("/iot/sync-profile")
@@ -1131,31 +1235,22 @@ public class SupplyChainWorkflowController {
                 .filter(v -> !v.isEmpty())
                 .orElse(body.getOrDefault("vehiclePlate", "49C-567.89"));
 
-        // Không tự động chuyển trạng thái lô hàng sang IN_TRANSIT hoặc ghi đè biển số xe khi chỉ đồng bộ OTA!
+        // Không tự động chuyển trạng thái lô hàng sang IN_TRANSIT hoặc ghi đè biển số
+        // xe khi chỉ đồng bộ OTA!
         batchOpt.ifPresent(b -> {
             b.getTransportJourney().put("iot_device_id", deviceId);
             blockchainService.saveFoodBatch(b);
         });
 
         String productName = batchOpt.map(FoodBatchDocument::getProductName).orElse(null);
-        Map<String, Object> otaCommand = mqttService.syncDynamicProfileToEsp32(batchCode, categoryCode, vehiclePlate, deviceId, productName);
-
-        BlockchainBlock block = blockchainService.mintBlock(
-                batchCode,
-                "OTA_PROFILE_SYNCED_TO_TRUCK",
-                "Xe lạnh " + vehiclePlate + " (" + deviceId + ")",
-                "LOGISTICS_DRIVER",
-                otaCommand,
-                cassandraService.buildMerkleLeavesForBatch(batchCode)
-        );
+        Map<String, Object> otaCommand = mqttService.syncDynamicProfileToEsp32(batchCode, categoryCode, vehiclePlate,
+                deviceId, productName);
 
         return ResponseEntity.ok(Map.of(
                 "status", "OTA_SYNCED",
                 "categoryCode", categoryCode,
                 "mqttTopic", "smartchain/device/" + deviceId + "/cmd",
-                "otaPayload", otaCommand,
-                "block", block
-        ));
+                "otaPayload", otaCommand));
     }
 
     @PostMapping("/iot/scenario/{scenarioMode}")
@@ -1164,8 +1259,7 @@ public class SupplyChainWorkflowController {
         return ResponseEntity.ok(Map.of(
                 "status", "SCENARIO_ACTIVATED",
                 "scenarioMode", scenarioMode.toUpperCase(),
-                "telemetry", telemetry
-        ));
+                "telemetry", telemetry));
     }
 
     @PostMapping("/iot/command")
@@ -1183,8 +1277,7 @@ public class SupplyChainWorkflowController {
                 "deviceId", deviceId,
                 "action", action,
                 "mqttTopic", "smartchain/device/" + deviceId + "/cmd",
-                "timestamp", Instant.now().toString()
-        ));
+                "timestamp", Instant.now().toString()));
     }
 
     @GetMapping("/telemetry/{batchCode}")
@@ -1253,7 +1346,7 @@ public class SupplyChainWorkflowController {
 
     @PostMapping("/qc/approve/{batchCode}")
     public ResponseEntity<?> approveOrRejectBatchSmartContract(@PathVariable String batchCode,
-                                                               @RequestBody Map<String, Object> qcPayload) {
+            @RequestBody Map<String, Object> qcPayload) {
         Optional<FoodBatchDocument> batchOpt = blockchainService.findBatchByCode(batchCode);
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -1269,19 +1362,28 @@ public class SupplyChainWorkflowController {
         List<SensorTelemetryDto> history = cassandraService.getTelemetryByBatch(batchCode);
         Map<String, Object> aiEval = aiService.evaluateBatchFreshnessAndTti(batchCode, profile, history);
 
-        boolean accepted = "ACCEPTED".equals(decision) || "APPROVE".equals(decision);
-        batch.setStatus(accepted ? "QC_ACCEPTED" : "QC_REJECTED");
+        boolean accepted = "ACCEPTED".equalsIgnoreCase(decision) || "ACCEPT".equalsIgnoreCase(decision)
+                || "APPROVE".equalsIgnoreCase(decision) || "APPROVED".equalsIgnoreCase(decision);
+        batch.setStatus(accepted ? "QC_ACCEPTED" : "RECALL_PENDING_PRODUCER");
 
         Map<String, Object> qcRecord = new LinkedHashMap<>();
         qcRecord.put("inspector", inspector);
-        qcRecord.put("decision", decision);
+        qcRecord.put("decision", accepted ? "ACCEPTED" : "REJECTED");
         qcRecord.put("supermarketName", supermarketName);
         qcRecord.put("nitrateTestPpm", nitrateTestPpm);
         qcRecord.put("microbiologicalTest", microbioResult);
         qcRecord.put("ttiFreshnessScore", aiEval.get("ttiFreshnessScore"));
         qcRecord.put("remainingShelfLifeHours", aiEval.get("remainingShelfLifeHours"));
+        String reason = String.valueOf(qcPayload.getOrDefault("reason", qcPayload.getOrDefault("inspectorNotes", "Kiểm định không đạt chuẩn chất lượng / vi phạm an toàn chuỗi lạnh")));
+        qcRecord.put("reason", reason);
         qcRecord.put("signedAt", Instant.now().toString());
         batch.setQcInspection(qcRecord);
+        if (!accepted) {
+            if (batch.getDynamicAttributes() == null) {
+                batch.setDynamicAttributes(new LinkedHashMap<>());
+            }
+            batch.getDynamicAttributes().put("recall_reason", reason);
+        }
         blockchainService.saveFoodBatch(batch);
 
         List<String> merkleLeaves = cassandraService.buildMerkleLeavesForBatch(batchCode);
@@ -1291,33 +1393,93 @@ public class SupplyChainWorkflowController {
                 inspector,
                 "QC_INSPECTOR",
                 qcRecord,
-                merkleLeaves
-        );
+                merkleLeaves);
 
         String vehiclePlate = String.valueOf(batch.getTransportJourney().getOrDefault("vehicle_plate", "49C-567.89"));
         if (accepted) {
             neo4jService.recordTruckDeliveryToStore(batchCode, vehiclePlate, supermarketName);
         }
 
+        // Phát sự kiện đồng bộ toàn hệ thống qua WebSocket để Quản lý Kệ và Nông trại tự động cập nhật ngay
+        Map<String, Object> wsPayload = new LinkedHashMap<>();
+        wsPayload.put("batchCode", batchCode);
+        wsPayload.put("status", batch.getStatus());
+        wsPayload.put("event", accepted ? "QC_APPROVED" : "QC_REJECTED_RECALL_SENT");
+        wsPayload.put("decision", accepted ? "ACCEPTED" : "REJECTED");
+        wsPayload.put("inspector", inspector);
+        wsPayload.put("timestamp", Instant.now().toString());
+        messagingTemplate.convertAndSend("/topic/batch-status", wsPayload);
+
         return ResponseEntity.ok(Map.of(
                 "batchCode", batchCode,
                 "status", batch.getStatus(),
                 "accepted", accepted,
                 "qcInspection", qcRecord,
-                "block", qcBlock
+                "block", qcBlock));
+    }
+
+    @PostMapping("/batches/{batchCode}/confirm-recall")
+    public ResponseEntity<?> confirmRecallByProducer(@PathVariable String batchCode,
+                                                     @RequestBody(required = false) Map<String, String> body) {
+        Optional<FoodBatchDocument> batchOpt = blockchainService.findBatchByCode(batchCode);
+        if (batchOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        FoodBatchDocument batch = batchOpt.get();
+        String producerName = body != null && body.containsKey("producerName") ? body.get("producerName") : batch.getFarmName();
+        String farmNote = body != null && body.containsKey("note") ? body.get("note") : "Nông trại đã xác nhận lệnh thu hồi và tiếp nhận xử lý lô hàng tại gốc.";
+
+        batch.setStatus("RECALLED");
+        batch.getDynamicAttributes().put("recall_confirmed_by_farm", true);
+        batch.getDynamicAttributes().put("recall_confirmed_at", Instant.now().toString());
+        batch.getDynamicAttributes().put("farm_recall_note", farmNote);
+
+        for (FoodBatchDocument.ItemQrSerial item : batch.getItemQrSerials()) {
+            item.setStatus("RECALLED_BLACKLISTED");
+        }
+        blockchainService.saveFoodBatch(batch);
+
+        BlockchainBlock block = blockchainService.mintBlock(
+                batchCode,
+                "CONFIRM_RECALL_ACCEPTED",
+                producerName,
+                "PRODUCER",
+                Map.of(
+                        "action", "RECALL_CONFIRMED_BY_FARM",
+                        "batchCode", batchCode,
+                        "farmName", batch.getFarmName(),
+                        "note", farmNote,
+                        "confirmedAt", Instant.now().toString()
+                ),
+                cassandraService.buildMerkleLeavesForBatch(batchCode)
+        );
+
+        Map<String, Object> wsPayload = new LinkedHashMap<>();
+        wsPayload.put("batchCode", batchCode);
+        wsPayload.put("status", "RECALLED");
+        wsPayload.put("event", "RECALL_CONFIRMED_BY_FARM");
+        wsPayload.put("timestamp", Instant.now().toString());
+        messagingTemplate.convertAndSend("/topic/batch-status", wsPayload);
+
+        return ResponseEntity.ok(Map.of(
+                "status", "RECALLED",
+                "batchCode", batchCode,
+                "message", "Nông trại đã xác nhận lệnh thu hồi lô hàng " + batchCode + " thành công!",
+                "block", block
         ));
     }
 
     // Phase 5: Smart Shelf Allocation (Redis ZSET) & POS Checkout (Redlock)
     @PostMapping("/shelf/stock/{batchCode}")
     public ResponseEntity<?> stockBatchOnSmartShelfFefo(@PathVariable String batchCode,
-                                                        @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         Optional<FoodBatchDocument> batchOpt = blockchainService.findBatchByCode(batchCode);
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
         FoodBatchDocument batch = batchOpt.get();
-        String shelfName = String.valueOf(body.getOrDefault("shelfName", "Kệ Lạnh Thông Minh FEFO #" + batch.getCategory()));
+        String shelfName = String
+                .valueOf(body.getOrDefault("shelfName", "Kệ Lạnh Thông Minh FEFO #" + batch.getCategory()));
 
         StorageProfile profile = profileRepository.findById(batch.getCategory()).orElse(null);
         List<SensorTelemetryDto> history = cassandraService.getTelemetryByBatch(batchCode);
@@ -1347,8 +1509,17 @@ public class SupplyChainWorkflowController {
                 "Nhân viên Kệ hàng (" + shelfName + ")",
                 "SHELF_OPERATOR",
                 Map.of("shelfName", shelfName, "remainingShelfLifeHours", remHours, "stockedItemCount", serials.size()),
-                cassandraService.buildMerkleLeavesForBatch(batchCode)
-        );
+                cassandraService.buildMerkleLeavesForBatch(batchCode));
+
+        // Phát sự kiện đồng bộ toàn hệ thống qua WebSocket để Quản lý Kệ, POS, Admin tự
+        // động cập nhật
+        Map<String, Object> wsPayload = new LinkedHashMap<>();
+        wsPayload.put("batchCode", batchCode);
+        wsPayload.put("status", "ON_SHELF");
+        wsPayload.put("shelfName", shelfName);
+        wsPayload.put("event", "SHELF_STOCKED");
+        wsPayload.put("timestamp", Instant.now().toString());
+        messagingTemplate.convertAndSend("/topic/batch-status", wsPayload);
 
         return ResponseEntity.ok(Map.of(
                 "batchCode", batchCode,
@@ -1356,8 +1527,7 @@ public class SupplyChainWorkflowController {
                 "remainingShelfLifeHours", remHours,
                 "fefoQueueForCategory", redisService.getFefoSortedBatches(batch.getCategory()),
                 "stockedSerials", serials,
-                "block", shelfBlock
-        ));
+                "block", shelfBlock));
     }
 
     @GetMapping("/shelf/fefo")
@@ -1376,8 +1546,7 @@ public class SupplyChainWorkflowController {
         double price = batchOpt.map(b -> b.getUnitPrice() != null ? b.getUnitPrice() : 45000.0).orElse(45000.0);
 
         Map<String, Object> posResult = redisService.processPosCheckoutWithRedlock(
-                serialCode, batchCode, productName, price, cashierId
-        );
+                serialCode, batchCode, productName, price, cashierId);
 
         int httpStatus = (int) posResult.getOrDefault("httpStatus", 200);
         boolean success = Boolean.TRUE.equals(posResult.get("success"));
@@ -1387,6 +1556,19 @@ public class SupplyChainWorkflowController {
                 item.setStatus("SOLD_SEAL_VOID");
                 item.setSoldAt(Instant.now());
                 posResult.put("item", item);
+            });
+
+            // Kiểm tra số lượng tem chưa bán còn lại trong lô hàng
+            boolean[] allSoldHolder = new boolean[] { false };
+            batchOpt.ifPresent(b -> {
+                long unsold = b.getItemQrSerials().stream()
+                        .filter(it -> !"SOLD_SEAL_VOID".equalsIgnoreCase(it.getStatus()) && !"VOID".equalsIgnoreCase(it.getStatus()) && !"RECALLED_BLACKLISTED".equalsIgnoreCase(it.getStatus()))
+                        .count();
+                if (unsold == 0 && !b.getItemQrSerials().isEmpty()) {
+                    b.setStatus("SOLD");
+                    allSoldHolder[0] = true;
+                }
+                blockchainService.saveFoodBatch(b);
             });
 
             @SuppressWarnings("unchecked")
@@ -1401,9 +1583,19 @@ public class SupplyChainWorkflowController {
                     "Quầy Thu Ngân " + cashierId,
                     "CASHIER",
                     Map.of("serialCode", serialCode, "receiptId", receiptId, "priceVnd", price, "sealStatus", "VOID"),
-                    List.of("POS_SOLD|" + serialCode + "|" + receiptId)
-            );
+                    List.of("POS_SOLD|" + serialCode + "|" + receiptId));
             posResult.put("block", posBlock);
+            posResult.put("isBatchSoldOut", allSoldHolder[0]);
+
+            // Phát sự kiện đồng bộ toàn hệ thống qua WebSocket để quầy POS, Admin, Quản lý kệ và Nông trại nhận ngay
+            Map<String, Object> wsPayload = new LinkedHashMap<>();
+            wsPayload.put("batchCode", batchCode);
+            wsPayload.put("serialCode", serialCode);
+            wsPayload.put("status", allSoldHolder[0] ? "SOLD" : "ON_SHELF");
+            wsPayload.put("event", allSoldHolder[0] ? "BATCH_SOLD_OUT" : "POS_ITEM_SOLD");
+            wsPayload.put("isSoldOut", allSoldHolder[0]);
+            wsPayload.put("timestamp", Instant.now().toString());
+            messagingTemplate.convertAndSend("/topic/batch-status", wsPayload);
         } else {
             // Đẩy cảnh báo gian lận QR / hàng thu hồi lên WebSocket
             messagingTemplate.convertAndSend("/topic/pos-alerts", posResult);
@@ -1420,8 +1612,7 @@ public class SupplyChainWorkflowController {
             return ResponseEntity.status(404).body(Map.of(
                     "found", false,
                     "code", code,
-                    "message", "Không tìm thấy Lô hàng hoặc Mã QR sản phẩm trong hệ thống!"
-            ));
+                    "message", "Không tìm thấy Lô hàng hoặc Mã QR sản phẩm trong hệ thống!"));
         }
 
         FoodBatchDocument batch = batchOpt.get();
@@ -1440,12 +1631,18 @@ public class SupplyChainWorkflowController {
         String ua = request != null ? request.getHeader("User-Agent") : "";
         String device = "Trình duyệt Máy tính";
         if (ua != null) {
-            if (ua.contains("iPhone")) device = "Apple iPhone (iOS Safari)";
-            else if (ua.contains("iPad")) device = "Apple iPad (iPadOS)";
-            else if (ua.contains("Android")) device = "Smartphone Android (Mobile)";
-            else if (ua.contains("Mobile")) device = "Thiết bị Di động";
-            else if (ua.contains("Macintosh")) device = "Apple Mac (macOS)";
-            else if (ua.contains("Windows")) device = "Máy tính Windows";
+            if (ua.contains("iPhone"))
+                device = "Apple iPhone (iOS Safari)";
+            else if (ua.contains("iPad"))
+                device = "Apple iPad (iPadOS)";
+            else if (ua.contains("Android"))
+                device = "Smartphone Android (Mobile)";
+            else if (ua.contains("Mobile"))
+                device = "Thiết bị Di động";
+            else if (ua.contains("Macintosh"))
+                device = "Apple Mac (macOS)";
+            else if (ua.contains("Windows"))
+                device = "Máy tính Windows";
         }
         String clientIp = request != null ? request.getRemoteAddr() : "127.0.0.1";
         if (request != null && request.getHeader("X-Forwarded-For") != null) {
@@ -1472,7 +1669,8 @@ public class SupplyChainWorkflowController {
         scanRecord.put("clientIp", clientIp);
         scanRecord.put("device", device);
         scanRecord.put("scanCount", scanCount);
-        scanRecord.put("statusAtScan", isSold ? "SEAL_VOID" : (itemOpt.isPresent() ? itemOpt.get().getStatus() : "ACTIVE"));
+        scanRecord.put("statusAtScan",
+                isSold ? "SEAL_VOID" : (itemOpt.isPresent() ? itemOpt.get().getStatus() : "ACTIVE"));
         scanRecord.put("isWarning", isSold);
         batch.getScanHistory().add(0, scanRecord);
         blockchainService.saveFoodBatch(batch);
@@ -1503,18 +1701,24 @@ public class SupplyChainWorkflowController {
                 .orElse(ResponseEntity.ok(Collections.emptyList()));
     }
 
-    @PostMapping({"/recall", "/admin/recall"})
+    @PostMapping({ "/recall", "/admin/recall" })
     public ResponseEntity<?> triggerEmergencyRecallNeo4j(@RequestBody Map<String, String> body) {
         String batchCode = body.getOrDefault("batchCode", "LOT-FISH-2026-001");
-        String reason = body.getOrDefault("reason", "Phát hiện vi phạm chuỗi lạnh / Cảnh báo An toàn Thực phẩm khẩn cấp");
+        String reason = body.getOrDefault("reason",
+                "Phát hiện vi phạm chuỗi lạnh / Cảnh báo An toàn Thực phẩm khẩn cấp");
 
         Map<String, Object> neo4jRecallReport = neo4jService.executeEmergencyRecall(batchCode, reason);
 
         @SuppressWarnings("unchecked")
-        List<String> serials = (List<String>) neo4jRecallReport.getOrDefault("affectedItemSerials", Collections.emptyList());
+        List<String> serials = (List<String>) neo4jRecallReport.getOrDefault("affectedItemSerials",
+                Collections.emptyList());
 
         blockchainService.findBatchByCode(batchCode).ifPresent(b -> {
             b.setStatus("RECALLED");
+            if (b.getDynamicAttributes() == null) {
+                b.setDynamicAttributes(new LinkedHashMap<>());
+            }
+            b.getDynamicAttributes().put("recall_reason", reason);
             for (FoodBatchDocument.ItemQrSerial item : b.getItemQrSerials()) {
                 item.setStatus("RECALLED_BLACKLISTED");
                 if (!serials.contains(item.getSerialCode())) {
@@ -1524,7 +1728,8 @@ public class SupplyChainWorkflowController {
             blockchainService.saveFoodBatch(b);
         });
 
-        // Đưa toàn bộ mã QR của lô hàng vào Redis Blacklist Set `recall:blacklisted_qrs`
+        // Đưa toàn bộ mã QR của lô hàng vào Redis Blacklist Set
+        // `recall:blacklisted_qrs`
         redisService.blacklistRecalledSerials(batchCode, serials);
 
         BlockchainBlock recallBlock = blockchainService.mintBlock(
@@ -1532,9 +1737,9 @@ public class SupplyChainWorkflowController {
                 "EMERGENCY_RECALL_ISSUED",
                 "Trung Tâm Kiểm Soát An Toàn Thực Phẩm (Admin/QC)",
                 "ADMIN",
-                Map.of("reason", reason, "blacklistedItemCount", serials.size(), "neo4jExecTimeSec", neo4jRecallReport.get("executionTimeSeconds")),
-                List.of("RECALL|" + batchCode + "|" + reason)
-        );
+                Map.of("reason", reason, "blacklistedItemCount", serials.size(), "neo4jExecTimeSec",
+                        neo4jRecallReport.get("executionTimeSeconds")),
+                List.of("RECALL|" + batchCode + "|" + reason));
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "EMERGENCY_RECALL_COMPLETED");
@@ -1545,8 +1750,16 @@ public class SupplyChainWorkflowController {
         messagingTemplate.convertAndSend("/topic/alerts", Map.of(
                 "batchCode", batchCode,
                 "breachType", "EMERGENCY_RECALL (" + reason + ")",
-                "timestamp", Instant.now().toString()
-        ));
+                "timestamp", Instant.now().toString()));
+
+        // Phát sự kiện đồng bộ toàn hệ thống qua WebSocket để mọi trang (Admin, Shelf,
+        // POS, Consumer) lập tức khóa hàng thu hồi
+        messagingTemplate.convertAndSend("/topic/batch-status", Map.of(
+                "batchCode", batchCode,
+                "status", "RECALLED",
+                "event", "EMERGENCY_RECALL",
+                "reason", reason,
+                "timestamp", Instant.now().toString()));
 
         return ResponseEntity.ok(response);
     }
@@ -1564,8 +1777,7 @@ public class SupplyChainWorkflowController {
                 "rolesCount", roleRepository.count(),
                 "usersCount", userRepository.count(),
                 "storageProfilesCount", profileRepository.count(),
-                "profiles", profileRepository.findAll()
-        ));
+                "profiles", profileRepository.findAll()));
 
         // 2. MongoDB Document Store (Polymorphic Batches & Blockchain Ledger)
         res.put("mongodb", Map.of(
@@ -1577,8 +1789,7 @@ public class SupplyChainWorkflowController {
                 "recentBlocks", blockchainService.getAllBlocks().stream()
                         .sorted(Comparator.comparing(BlockchainBlock::getTimestamp).reversed())
                         .limit(8)
-                        .collect(Collectors.toList())
-        ));
+                        .collect(Collectors.toList())));
 
         // 3. Redis In-Memory Data Structure Store (Hash, Sorted Set, Set, Redlock)
         res.put("redis", Map.of(
@@ -1590,8 +1801,7 @@ public class SupplyChainWorkflowController {
                 "posSoldQrs", redisService.getPosSoldQrSet(),
                 "recalledBlacklistCount", redisService.getRecalledBlacklistQrSet().size(),
                 "recalledBlacklistedQrs", redisService.getRecalledBlacklistQrSet(),
-                "recentCommands", redisService.getRecentRedisCommands()
-        ));
+                "recentCommands", redisService.getRecentRedisCommands()));
 
         // 4. Apache Cassandra Wide-Column Time-Series Store
         Map<String, Object> cassandraOverview = new LinkedHashMap<>(cassandraService.getCassandraClusterOverview());
@@ -1610,7 +1820,8 @@ public class SupplyChainWorkflowController {
     public ResponseEntity<byte[]> exportCassandraTelemetryCsv() {
         List<SensorTelemetryDto> allRows = cassandraService.getAllRecentTelemetry(500);
         StringBuilder csv = new StringBuilder();
-        csv.append("batch_code,year_month,recorded_at,device_id,vehicle_id,category_code,temperature_c,humidity_pct,gas_type,gas_ppm,door_open,relay_cooling,alert_triggered,latitude,longitude\n");
+        csv.append(
+                "batch_code,year_month,recorded_at,device_id,vehicle_id,category_code,temperature_c,humidity_pct,gas_type,gas_ppm,door_open,relay_cooling,alert_triggered,latitude,longitude\n");
         for (SensorTelemetryDto r : allRows) {
             String ym = YearMonth.from(r.getTimestamp().atZone(ZoneOffset.UTC)).toString();
             csv.append(String.format(Locale.US, "%s,%s,%s,%s,%s,%s,%.2f,%.2f,%s,%.2f,%s,%s,\"%s\",%.5f,%.5f\n",

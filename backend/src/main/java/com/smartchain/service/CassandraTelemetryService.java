@@ -4,8 +4,14 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
 import com.smartchain.dto.SensorTelemetryDto;
 import jakarta.annotation.PostConstruct;
+import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,10 +30,7 @@ import java.util.stream.Collectors;
  * Cassandra Wide-Column Time-Series Service:
  * Mô phỏng & đồng bộ trực tiếp bảng `smartchain_iot.sensor_telemetry`
  * với Partition Key `(batch_code, year_month)` và Clustering Key `recorded_at DESC`.
- * Tính năng:
- * - Bổ sung cột `latitude` và `longitude`
- * - Tự động tính `year_month` động theo `YearMonth.now(ZoneOffset.UTC)`
- * - Thực thi câu lệnh CQL `SELECT` thật khi kết nối Cassandra khả dụng.
+ * Đồng thời đồng bộ lưu trữ vĩnh viễn vào MongoDB `sensor_telemetry` để không bao giờ mất dữ liệu khi restart.
  */
 @Service
 public class CassandraTelemetryService {
@@ -44,11 +47,18 @@ public class CassandraTelemetryService {
     @Autowired(required = false)
     private CqlSession cqlSession;
 
+    @Autowired(required = false)
+    private MongoClient mongoClient;
+
+    @Value("${spring.data.mongodb.database:supermarket_mongo}")
+    private String mongoDbName = "supermarket_mongo";
+
     private PreparedStatement insertPrepared;
     private PreparedStatement selectByBatchPrepared;
 
     @PostConstruct
     public void initCassandraSchema() {
+        loadExistingFromMongo();
         if (cqlSession == null) return;
         try {
             cqlSession.execute(String.format(
@@ -144,11 +154,45 @@ public class CassandraTelemetryService {
                 log.debug("[CASSANDRA-WRITE] Non-fatal error writing row: {}", e.getMessage());
             }
         }
+
+        // Lưu trữ bền vững vào MongoDB collection 'sensor_telemetry' để không bao giờ mất dữ liệu khi restart
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                MongoCollection<Document> col = db.getCollection("sensor_telemetry");
+                Document doc = new Document()
+                        .append("batch_code", dto.getBatchCode())
+                        .append("device_id", dto.getDeviceId())
+                        .append("vehicle_id", dto.getVehicleId())
+                        .append("category", dto.getCategoryCode())
+                        .append("temperature", dto.getTemperature())
+                        .append("humidity", dto.getHumidity())
+                        .append("gas_value", dto.getGasPpm())
+                        .append("gas_type", dto.getGasType())
+                        .append("weight_kg", dto.getWeightKg())
+                        .append("door_open", dto.getDoorOpen())
+                        .append("is_breached", dto.getIsBreached())
+                        .append("relay_cooling", dto.getRelayCooling())
+                        .append("alert_triggered", dto.getAlertTriggered())
+                        .append("latitude", dto.getLatitude())
+                        .append("longitude", dto.getLongitude())
+                        .append("recorded_at", dto.getTimestamp().toString());
+                col.insertOne(doc);
+            } catch (Exception e) {
+                log.debug("[MONGO-TELEMETRY] Save error: {}", e.getMessage());
+            }
+        }
     }
 
     public void clearTelemetryForBatch(String batchCode) {
         if (batchCode == null) return;
         wideColumnPartitions.remove(batchCode);
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                db.getCollection("sensor_telemetry").deleteMany(Filters.eq("batch_code", batchCode));
+            } catch (Exception ignored) {}
+        }
         if (cqlSession != null) {
             try {
                 String currentYm = YearMonth.now(ZoneOffset.UTC).toString();
@@ -159,9 +203,62 @@ public class CassandraTelemetryService {
         }
     }
 
+    public void loadExistingFromMongo() {
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                MongoCollection<Document> col = db.getCollection("sensor_telemetry");
+                long count = col.countDocuments();
+                if (count > 0) {
+                    int loaded = 0;
+                    for (Document doc : col.find().sort(Sorts.descending("recorded_at")).limit(5000)) {
+                        SensorTelemetryDto dto = mapDocToDto(doc);
+                        wideColumnPartitions.computeIfAbsent(dto.getBatchCode(), k -> new CopyOnWriteArrayList<>()).add(dto);
+                        loaded++;
+                    }
+                    log.info("[TELEMETRY-SYNC] Loaded {} telemetry records from MongoDB 'sensor_telemetry'", loaded);
+                }
+            } catch (Exception e) {
+                log.warn("[TELEMETRY-SYNC] Error loading from MongoDB: {}", e.getMessage());
+            }
+        }
+    }
+
+    private SensorTelemetryDto mapDocToDto(Document doc) {
+        SensorTelemetryDto dto = new SensorTelemetryDto();
+        dto.setBatchCode(doc.getString("batch_code"));
+        dto.setDeviceId(doc.getString("device_id"));
+        dto.setVehicleId(doc.getString("vehicle_id"));
+        dto.setCategoryCode(doc.getString("category"));
+        dto.setTemperature(doc.get("temperature") instanceof Number n ? n.doubleValue() : 0.0);
+        dto.setHumidity(doc.get("humidity") instanceof Number n ? n.doubleValue() : 0.0);
+        dto.setGasPpm(doc.get("gas_value") instanceof Number n ? n.doubleValue() : 0.0);
+        dto.setGasType(doc.getString("gas_type"));
+        dto.setWeightKg(doc.get("weight_kg") instanceof Number n ? n.doubleValue() : 150.0);
+        dto.setDoorOpen(Boolean.TRUE.equals(doc.getBoolean("door_open")));
+        dto.setIsBreached(Boolean.TRUE.equals(doc.getBoolean("is_breached")));
+        dto.setRelayCooling(Boolean.TRUE.equals(doc.getBoolean("relay_cooling")));
+        dto.setAlertTriggered(doc.getString("alert_triggered"));
+        dto.setLatitude(doc.get("latitude") instanceof Number n ? n.doubleValue() : 0.0);
+        dto.setLongitude(doc.get("longitude") instanceof Number n ? n.doubleValue() : 0.0);
+        Object recordedAt = doc.get("recorded_at");
+        if (recordedAt instanceof Date d) {
+            dto.setTimestamp(d.toInstant());
+        } else if (recordedAt instanceof String s) {
+            try {
+                dto.setTimestamp(Instant.parse(s));
+            } catch (Exception e) {
+                dto.setTimestamp(Instant.now());
+            }
+        } else {
+            dto.setTimestamp(Instant.now());
+        }
+        return dto;
+    }
+
     /**
      * Thực thi truy vấn CQL SELECT thật từ Cassandra khi kết nối khả dụng,
-     * đồng thời hợp nhất với bộ đệm thời gian thực.
+     * đồng thời hợp nhất với bộ đệm thời gian thực và tự động fallback MongoDB.
      */
     public List<SensorTelemetryDto> getTelemetryByBatch(String batchCode) {
         if (cqlSession != null && selectByBatchPrepared != null) {
@@ -179,7 +276,27 @@ public class CassandraTelemetryService {
                 log.debug("[CASSANDRA-READ] Fallback to memory partition for {}: {}", batchCode, e.getMessage());
             }
         }
-        return new ArrayList<>(wideColumnPartitions.getOrDefault(batchCode, Collections.emptyList()));
+        List<SensorTelemetryDto> cached = wideColumnPartitions.get(batchCode);
+        if (cached != null && !cached.isEmpty()) {
+            return new ArrayList<>(cached);
+        }
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                MongoCollection<Document> col = db.getCollection("sensor_telemetry");
+                List<SensorTelemetryDto> list = new ArrayList<>();
+                for (Document doc : col.find(Filters.eq("batch_code", batchCode)).sort(Sorts.descending("recorded_at")).limit(200)) {
+                    list.add(mapDocToDto(doc));
+                }
+                if (!list.isEmpty()) {
+                    wideColumnPartitions.put(batchCode, new CopyOnWriteArrayList<>(list));
+                    return list;
+                }
+            } catch (Exception e) {
+                log.debug("[MONGODB-TELEMETRY-READ] Error reading telemetry for {}: {}", batchCode, e.getMessage());
+            }
+        }
+        return Collections.emptyList();
     }
 
     public List<SensorTelemetryDto> getAllRecentTelemetry(int limit) {

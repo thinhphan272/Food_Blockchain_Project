@@ -53,10 +53,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         SecurityContextHolder.getContext().setAuthentication(authToken);
                     }
                 } catch (Exception ex) {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("{\"status\":\"ERROR\",\"error\":\"INVALID_OR_EXPIRED_JWT\",\"message\":\"Token JWT không hợp lệ hoặc đã hết hạn!\"}");
-                    return;
+                    // Token không hợp lệ hoặc đã hết hạn: Làm sạch SecurityContext
+                    // Cho phép filterChain tiếp tục để các endpoint public (GET /batches, /profiles, /trace...)
+                    // vẫn tải được dữ liệu bình thường mà không làm tê liệt giao diện
+                    SecurityContextHolder.clearContext();
                 }
             }
         }

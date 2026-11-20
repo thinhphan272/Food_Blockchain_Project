@@ -8,6 +8,7 @@ import com.mongodb.client.model.ReplaceOptions;
 import com.mongodb.client.model.Sorts;
 import com.smartchain.model.BlockchainBlock;
 import com.smartchain.model.FoodBatchDocument;
+import jakarta.annotation.PostConstruct;
 import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +46,7 @@ public class BlockchainLedgerService {
     private final Map<String, FoodBatchDocument> batchCollection = new ConcurrentHashMap<>();
     private final Map<String, FoodBatchDocument.ItemQrSerial> qrSerialIndex = new ConcurrentHashMap<>();
     private final List<BlockchainBlock> ledgerCollection = new CopyOnWriteArrayList<>();
+    private final List<Map<String, Object>> dynamicCompletedTrips = new CopyOnWriteArrayList<>();
 
     // Hệ thống PKI Bất đối xứng ECDSA (secp256r1 / prime256v1) cho các Actor
     private final Map<String, KeyPair> actorKeyPairs = new ConcurrentHashMap<>();
@@ -186,6 +188,7 @@ public class BlockchainLedgerService {
         return blk;
     }
 
+    @PostConstruct
     @SuppressWarnings("unchecked")
     public void loadExistingFromMongo() {
         if (mongoClient == null) return;
@@ -211,10 +214,64 @@ public class BlockchainLedgerService {
                 }
             }
 
-            log.info("[MONGODB-SYNC] Loaded {} batches and {} blockchain blocks from MongoDB '{}'",
-                    batchCollection.size(), ledgerCollection.size(), mongoDbName);
+            // 3. Load driver_trips: Đọc lịch sử các chuyến xe đã hoàn thành từ MongoDB
+            loadDriverTrips();
+
+            log.info("[MONGODB-SYNC] Loaded {} batches, {} blockchain blocks, and {} driver trips from MongoDB '{}'",
+                    batchCollection.size(), ledgerCollection.size(), dynamicCompletedTrips.size(), mongoDbName);
         } catch (Exception e) {
             log.debug("[MONGODB-SYNC] Skip loading existing MongoDB docs: {}", e.getMessage());
+        }
+    }
+
+    public synchronized void saveDriverTrip(Map<String, Object> tripRecord) {
+        if (tripRecord == null) return;
+        String tripId = String.valueOf(tripRecord.getOrDefault("tripId", "TRIP-VN-" + (System.currentTimeMillis() % 10000)));
+        dynamicCompletedTrips.removeIf(t -> tripId.equals(t.get("tripId")));
+        dynamicCompletedTrips.add(0, tripRecord);
+
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                MongoCollection<Document> col = db.getCollection("driver_trips");
+                Document doc = new Document(tripRecord);
+                col.replaceOne(Filters.eq("tripId", tripId), doc, new ReplaceOptions().upsert(true));
+                log.info("[MONGODB-TRIP] Persisted trip {} to collection 'driver_trips'", tripId);
+            } catch (Exception e) {
+                log.debug("[MONGODB-TRIP] Non-fatal error persisting trip {}: {}", tripId, e.getMessage());
+            }
+        }
+    }
+
+    public synchronized List<Map<String, Object>> loadDriverTrips() {
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                MongoCollection<Document> col = db.getCollection("driver_trips");
+                for (Document doc : col.find()) {
+                    Map<String, Object> map = new LinkedHashMap<>(doc);
+                    map.remove("_id");
+                    String tid = String.valueOf(map.get("tripId"));
+                    if (tid != null && dynamicCompletedTrips.stream().noneMatch(x -> tid.equals(x.get("tripId")))) {
+                        dynamicCompletedTrips.add(0, map);
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("[MONGODB-TRIP-LOAD] Error loading driver trips: {}", e.getMessage());
+            }
+        }
+        return new ArrayList<>(dynamicCompletedTrips);
+    }
+
+    public synchronized void removeDriverTripByBatchCode(String batchCode) {
+        if (batchCode == null) return;
+        dynamicCompletedTrips.removeIf(t -> batchCode.equalsIgnoreCase(String.valueOf(t.get("batchCode"))));
+        if (mongoClient != null) {
+            try {
+                MongoDatabase db = mongoClient.getDatabase(mongoDbName);
+                MongoCollection<Document> col = db.getCollection("driver_trips");
+                col.deleteMany(Filters.eq("batchCode", batchCode));
+            } catch (Exception ignored) {}
         }
     }
 

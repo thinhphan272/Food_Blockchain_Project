@@ -68,6 +68,7 @@ public class DataInitializerService implements CommandLineRunner {
         initMySqlRolesAndUsers();
         initMySqlAndRedisStorageProfiles();
         blockchainLedgerService.loadExistingFromMongo();
+        cassandraTelemetryService.loadExistingFromMongo();
         initPolyglotBatchesBlockchainCassandraAndNeo4j();
         log.info("================================================================================");
         log.info("  SMARTCHAIN POLYGLOT 5-DB ENGINE READY ON PORT 8080 (ONLINE / HYBRID MODE)");
@@ -614,7 +615,16 @@ public class DataInitializerService implements CommandLineRunner {
             double avgGas,
             String finalStatus) {
 
-        // 1. Làm sạch dữ liệu sổ cái và dữ liệu cảm biến cũ nếu có để đảm bảo tính nhất quán tuyệt đối
+        // KIỂM TRA NẾU LÔ HÀNG ĐÃ TỒN TẠI TRONG CƠ SỞ DỮ LIỆU THÌ TUYỆT ĐỐI KHÔNG GHI ĐÈ!
+        // Giữ nguyên toàn bộ trạng thái tiến độ người dùng đã thực hiện (DELIVERED, IN_TRANSIT, các khối Blockchain đã đúc, dữ liệu cảm biến Cassandra...)
+        Optional<FoodBatchDocument> existing = blockchainLedgerService.findBatchByCode(batchCode);
+        if (existing.isPresent()) {
+            log.info("[DATA-INIT] Lô hàng {} đã tồn tại trong CSDL (Trạng thái: {}). Giữ nguyên trạng thái và dữ liệu thực tế, không ghi đè lại!",
+                    batchCode, existing.get().getStatus());
+            return;
+        }
+
+        // 1. Chỉ làm sạch dữ liệu sổ cái và dữ liệu cảm biến khi lô hàng chưa từng tồn tại
         blockchainLedgerService.clearChainForBatch(batchCode);
         cassandraTelemetryService.clearTelemetryForBatch(batchCode);
 
