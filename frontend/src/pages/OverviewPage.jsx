@@ -48,6 +48,8 @@ export default function OverviewPage({
   ttiDelta,
   tempStatusText,
   gasStatusText,
+  isHistorical = false,
+  tempSpikeCount = 0,
   getCassandraCsvExportUrl,
 }) {
   const CARD =
@@ -433,7 +435,7 @@ export default function OverviewPage({
 
   // Xác định trạng thái lô hàng: Thu hồi khẩn cấp, Đang di chuyển hoặc Đã bàn giao
   const batchStatusUpper = (selectedBatch?.status || '').toUpperCase();
-  const isRecalled = batchStatusUpper.includes('RECALL');
+  const isRecalled = batchStatusUpper.includes('RECALL') || batchStatusUpper === 'QC_REJECTED';
   const isMovingOrDone = [
     'IN_TRANSIT',
     'ARRIVED_AT_STORE',
@@ -441,7 +443,27 @@ export default function OverviewPage({
     'QC_ACCEPTED',
     'ON_SHELF',
     'SOLD',
+    'RECALLED',
+    'QC_REJECTED',
+    'RECALL_PENDING_PRODUCER',
   ].includes(batchStatusUpper);
+
+  // Trích xuất lý do thu hồi từ bên kiểm duyệt QC / Blockchain
+  const recallReason =
+    selectedBatch?.recall_reason ||
+    selectedBatch?.recallReason ||
+    selectedBatch?.qc_inspection?.reason ||
+    selectedBatch?.qc_inspection?.inspectorNotes ||
+    selectedBatch?.qcInspection?.reason ||
+    selectedBatch?.qcInspection?.inspectorNotes ||
+    selectedBatch?.dynamic_attributes?.recall_reason ||
+    (blockchainVerification?.blocks || []).find((b) => String(b.action || '').toUpperCase().includes('RECALL'))?.payload?.reason ||
+    'Nhiệt độ bảo quản và nồng độ vi khí hậu vượt ngưỡng quy chuẩn an toàn trong quá trình vận chuyển (đứt gãy chuỗi lạnh), phát hiện suy giảm độ tươi TTI không đủ điều kiện nhập kệ siêu thị.';
+
+  const recallInspector =
+    selectedBatch?.qc_inspection?.inspector ||
+    selectedBatch?.qcInspection?.inspector ||
+    'Trần Minh Khoa (Bộ Phận Giám Sát QA/QC Siêu Thị)';
 
   const selectedTransport =
     selectedBatch?.transportJourney || selectedBatch?.transport_journey || {};
@@ -460,21 +482,42 @@ export default function OverviewPage({
     selectedBatch?.transport_driver_name ||
     selectedBatch?.driver_name ||
     '';
-  const selectedWeightKg =
+  const selectedWeightKg = Number(
     selectedBatch?.total_weight_kg && Number(selectedBatch.total_weight_kg) >= 100
-      ? Number(selectedBatch.total_weight_kg)
+      ? selectedBatch.total_weight_kg
       : selectedBatch?.weight_kg && Number(selectedBatch.weight_kg) >= 100
-      ? Number(selectedBatch.weight_kg)
-      : 500;
-  const selectedPackageCount = selectedBatch?.package_count || Math.round(selectedWeightKg / 10);
-  const selectedWeightPerPackage = selectedBatch?.weight_per_package_kg || (selectedWeightKg / selectedPackageCount).toFixed(0);
+      ? selectedBatch.weight_kg
+      : 500
+  ) || 500;
+  const selectedPackageCount = Math.max(1, Number(selectedBatch?.package_count) || Math.round(selectedWeightKg / 10) || 50);
+  const selectedWeightPerPackage = selectedBatch?.weight_per_package_kg
+    ? String(selectedBatch.weight_per_package_kg)
+    : (selectedWeightKg / selectedPackageCount).toFixed(0);
   const selectedPackageUnit = selectedBatch?.package_unit || 'Thùng carton tiêu chuẩn';
 
   // Lốc lạnh phụ (Relay): Chỉ hoạt động khi xe đang chạy trên đường và thiết bị gửi tín hiệu kích hoạt
-  const effectiveRelay = isMovingOrDone ? Boolean(relayState) : false;
+  const effectiveRelay = isMovingOrDone && !isRecalled ? Boolean(relayState) : false;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative pb-10">
+      {/* Nút Đổi Lô Hàng Nổi (Floating Action Button) - Cuộn xuống dưới bất kỳ vị trí nào cũng bấm đổi lô được */}
+      {onSelectBatch && (
+        <div className="fixed bottom-6 right-6 z-40">
+          <button
+            type="button"
+            onClick={() => {
+              onSelectBatch(null);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#F95716] to-[#E0430B] hover:brightness-110 text-white text-xs sm:text-sm font-black shadow-[0_10px_30px_rgba(249,87,22,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/40"
+            title="Bấm để quay về danh sách chọn lô hàng khác"
+          >
+            <Repeat size={16} />
+            <span>⇄ Đổi Lô Hàng</span>
+          </button>
+        </div>
+      )}
+
       {/* Tiêu đề & Thông tin xe vận chuyển & Nút chọn lô khác */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -493,28 +536,34 @@ export default function OverviewPage({
             <button
               type="button"
               onClick={() => onSelectBatch(null)}
-              className="px-3.5 py-2 rounded-2xl border border-neutral-300 dark:border-neutral-700 hover:border-[#F95716] text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-[#F95716] transition-all bg-white dark:bg-[#1C140F] shadow-sm cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 hover:border-[#F95716] text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-[#F95716] transition-all bg-white dark:bg-[#1C140F] shadow-sm cursor-pointer inline-flex items-center gap-1.5"
             >
+              <Repeat size={13} />
               ⇄ Đổi Lô Hàng
             </button>
           )}
 
-          {/* Biển số xe vận chuyển to, rõ ràng */}
-          <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-orange-500/10 border border-[#F95716]/25 shadow-sm">
-            <Truck size={18} className="text-[#F95716] shrink-0" />
-            <div className="leading-tight">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
-                Phương tiện vận chuyển
-              </span>
-              <span className="text-base sm:text-lg font-black font-mono text-[#F95716] tracking-wide">
-                {hasSelectedPlate ? selectedPlateRaw : 'Chưa phân công'}
-              </span>
+          {/* Biển số xe vận chuyển dạng BIỂN VÀNG VIỆT NAM THƯƠNG MẠI */}
+          {hasSelectedPlate ? (
+            <div className="inline-flex flex-col items-center justify-center bg-[#FFD700] border-2 border-neutral-900 rounded-2xl px-5 py-1.5 shadow-md shrink-0">
+              <div className="text-[9.5px] font-black tracking-widest text-neutral-900 uppercase flex items-center gap-1.5 leading-none">
+                <span>VIỆT NAM</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block"></span>
+              </div>
+              <div className="font-mono text-xl sm:text-2xl font-black tracking-widest text-neutral-950 leading-none mt-1">
+                {selectedPlateRaw}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="inline-flex flex-col items-center justify-center bg-neutral-100 dark:bg-neutral-800 border-2 border-neutral-300 dark:border-neutral-700 rounded-2xl px-4 py-2 shadow-sm shrink-0">
+              <span className="text-[9px] font-black tracking-widest text-neutral-400 uppercase">PHƯƠNG TIỆN</span>
+              <span className="font-mono text-sm font-bold text-neutral-500 dark:text-neutral-400 mt-0.5">Chưa phân công</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Thẻ tóm tắt thông tin lô hàng (hiển thị đầy đủ cho cả lô chưa phân công, chờ nhận, chờ rời bến) */}
+      {/* Thẻ tóm tắt thông tin lô hàng */}
       <div className="rounded-[24px] border border-orange-950/10 dark:border-orange-500/20 bg-white dark:bg-[#1C140F] p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -547,7 +596,7 @@ export default function OverviewPage({
                   : batchStatusUpper === 'IN_TRANSIT'
                   ? '⚡ Đang vận chuyển trên tuyến'
                   : batchStatusUpper === 'ON_SHELF'
-                  ? '🏪 Đang bày bán quầy kệ siêu thị'
+                  ? 'Đang bày bán quầy kệ siêu thị'
                   : isMovingOrDone
                   ? '✓ Đã bàn giao kho siêu thị'
                   : batchStatusUpper === 'ASSIGNED_PENDING'
@@ -575,6 +624,51 @@ export default function OverviewPage({
             </div>
           ) : null}
         </div>
+
+        {/* THÔNG TIN LÝ DO THU HỒI CHI TIẾT TỪ BÊN KIỂM DUYỆT QC */}
+        {isRecalled && (
+          <div className="mt-4 p-4 rounded-2xl bg-red-500/[0.04] dark:bg-red-950/20 border-2 border-red-500/30 text-left">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-red-500/20">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+                <h4 className="text-xs sm:text-sm font-black text-red-600 dark:text-red-400 uppercase tracking-wide">
+                  Hồ Sơ Lý Do Phát Lệnh Thu Hồi Từ Cổng Kiểm Duyệt QC
+                </h4>
+              </div>
+              <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">
+                Người lập biên bản: <strong className="text-[#1A1A1A] dark:text-[#F5F5F5]">{recallInspector}</strong>
+              </span>
+            </div>
+            
+            <div className="mt-3">
+              <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                Lý do & Nội dung từ chối nghiệm thu:
+              </div>
+              <div className="p-3 rounded-xl bg-white dark:bg-[#1C140F] border border-red-500/20 text-xs sm:text-[13px] font-semibold text-red-700 dark:text-red-300 leading-relaxed shadow-sm">
+                "{recallReason}"
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-red-500/15 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-red-600 text-white font-mono font-bold text-[10px]">
+                  SEAL_VOID
+                </span>
+                <span className="text-neutral-600 dark:text-neutral-300 font-medium">
+                  Hủy tem QR toàn bộ 100% sản phẩm thuộc lô
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-neutral-900 text-amber-300 font-mono font-bold text-[10px]">
+                  REDIS BLACKLIST
+                </span>
+                <span className="text-neutral-600 dark:text-neutral-300 font-medium">
+                  Khóa quẹt POS thu ngân & Phát lệnh hồi hương về Nông trại
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 pt-3.5 border-t border-orange-950/5 dark:border-orange-500/10 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
           <div>
@@ -708,7 +802,7 @@ export default function OverviewPage({
                           ? latestTelemetry.weight_kg
                           : selectedWeightKg
                       ).toFixed(1)} kg`
-                    : `${selectedWeightKg.toFixed(0)} kg`}
+                    : `${Number(selectedWeightKg || 500).toFixed(0)} kg`}
                 </div>
               </div>
 
@@ -822,6 +916,8 @@ export default function OverviewPage({
         selectedBatch={selectedBatch}
         latestTelemetry={latestTelemetry}
         isLive={isMovingOrDone}
+        isHistorical={isHistorical}
+        tempSpikeCount={tempSpikeCount}
       />
 
       {/* Row 3: Biểu Đồ Vi Khí Hậu & Hành Trình Chuỗi Cung Ứng */}
@@ -830,11 +926,15 @@ export default function OverviewPage({
           <div className="flex items-center justify-between pb-3 border-b border-orange-950/5 dark:border-orange-500/10">
             <div>
               <h3 className="text-[15px] font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
-                Biểu đồ kép vi khí hậu thời gian thực
+                {batchStatusUpper === 'IN_TRANSIT'
+                  ? 'Biểu đồ kép vi khí hậu thời gian thực'
+                  : 'Biểu đồ giám sát vi khí hậu suốt hành trình'}
               </h3>
               <p className="mt-0.5 text-[11.5px] font-medium text-neutral-400">
-                {isMovingOrDone
-                  ? 'Giám sát liên tục nhiệt độ và nồng độ khí bảo quản'
+                {batchStatusUpper === 'IN_TRANSIT'
+                  ? 'Giám sát trực tiếp thời gian thực nhiệt độ và nồng độ khí xe lạnh'
+                  : isMovingOrDone
+                  ? 'Hồ sơ lịch sử cảm biến ghi nhận trong suốt quá trình vận chuyển'
                   : 'Lô hàng chưa xuất bến • Chế độ Chờ (Standby)'}
               </p>
             </div>
@@ -844,7 +944,7 @@ export default function OverviewPage({
               </span>
               {isMovingOrDone && (
                 <a
-                  href={getCassandraCsvExportUrl()}
+                  href={typeof getCassandraCsvExportUrl === 'function' ? getCassandraCsvExportUrl() : '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-orange-950/5 dark:border-orange-500/10 text-[11px] font-bold text-[#1A1A1A] dark:text-[#F5F5F5] hover:text-[#F95716]"
@@ -898,6 +998,22 @@ export default function OverviewPage({
           <SupplyChainGraphView batch={selectedBatch} latestTelemetry={latestTelemetry} />
         </div>
       </div>
+
+      {/* Nút Quay Lại Nằm Dưới Đáy Trang - Thuận tiện bấm khi cuộn hết trang */}
+      {onSelectBatch && (
+        <div className="pt-6 pb-2 border-t border-orange-950/5 dark:border-orange-500/10 flex justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              onSelectBatch(null);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl border border-neutral-300 dark:border-neutral-700 hover:border-[#F95716] text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-[#F95716] transition-all bg-white dark:bg-[#1C140F] shadow-sm hover:shadow cursor-pointer"
+          >
+            <ChevronLeft size={16} /> Quay lại danh sách tất cả các lô hàng
+          </button>
+        </div>
+      )}
     </div>
   );
 }

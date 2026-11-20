@@ -13,7 +13,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap } from 'react-leaflet';
 
-import { Maximize, Minimize, Truck } from './MomentumIcons';
+import { Maximize, Minimize, Truck, Activity } from './MomentumIcons';
 
 function MapResizer() {
   const map = useMap();
@@ -45,6 +45,31 @@ ChartJS.register(
  * - Trục Y trái: Nhiệt độ thực tế (°C) kèm đường ngưỡng Trần & Sàn
  * - Trục Y phải: Nồng độ khí sinh học (ppm)
  */
+class ChartCanvasErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err) {
+    console.warn('[ChartCanvasErrorBoundary] Caught canvas error:', err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center p-8 text-center min-h-[340px] w-full bg-neutral-50/50 dark:bg-white/[0.01] rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-800">
+          <Activity size={24} className="text-[#F95716] mb-2" />
+          <h4 className="text-sm font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">Biểu đồ vi khí hậu đang nạp dữ liệu</h4>
+          <p className="text-xs text-neutral-400 mt-1">Dữ liệu telemetry của lô hàng đang được đồng bộ.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isDark = false }) {
   const [realtimeClock, setRealtimeClock] = React.useState(() => Date.now());
 
@@ -63,73 +88,61 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
   const minTemp = profile?.minTemp ?? 8.0;
   const maxTemp = profile?.maxTemp ?? 12.0;
   const gasType = profile?.gasType ?? 'C2H4';
-  const defaultTargetTemp = Number((((minTemp + maxTemp) / 2)).toFixed(1));
 
-  // Tạo các mốc thời gian real-time GMT+7 hiện tại nếu chưa có telemetry từ cảm biến
-  const fallbackLabels = React.useMemo(() => {
-    const now = new Date(realtimeClock);
-    const result = [];
-    for (let i = 4; i >= 0; i--) {
-      const t = new Date(now.getTime() - i * 5000);
-      result.push(
-        t.toLocaleTimeString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        })
-      );
-    }
-    return result;
-  }, [realtimeClock]);
-
-  const fallbackTempData = React.useMemo(() => [
-    Number((defaultTargetTemp + 0.2).toFixed(1)),
-    Number((defaultTargetTemp - 0.1).toFixed(1)),
-    Number((defaultTargetTemp + 0.3).toFixed(1)),
-    Number(defaultTargetTemp.toFixed(1)),
-    Number((defaultTargetTemp + 0.1).toFixed(1))
-  ], [defaultTargetTemp]);
-
-  const fallbackGasData = React.useMemo(() => [10.2, 10.5, 10.4, 10.8, 10.6], []);
+  if (ordered.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center min-h-[340px] w-full bg-neutral-50/50 dark:bg-white/[0.01] rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-800">
+        <div className="w-12 h-12 rounded-full bg-orange-500/10 text-[#F95716] flex items-center justify-center mb-3">
+          <Activity size={24} />
+        </div>
+        <h4 className="text-sm font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+          Chưa có dữ liệu vi khí hậu hành trình
+        </h4>
+        <p className="text-xs text-neutral-400 max-w-sm mt-1">
+          Dữ liệu nhiệt độ và khí sinh học sẽ được cảm biến IoT ESP32 tự động ghi nhận và đồng bộ trực tiếp khi xe lạnh xuất bến.
+        </p>
+      </div>
+    );
+  }
 
   const labels = ordered.map((item, idx) => {
     const ts = item.recorded_at || item.timestamp;
     if (!ts) {
-      const t = new Date(realtimeClock - (ordered.length - 1 - idx) * 3000);
-      return t.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      return `Mẫu #${idx + 1}`;
     }
     try {
       const d = new Date(ts);
-      return d.toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month} ${hours}:${minutes}`;
     } catch {
-      return `M#${idx + 1}`;
+      return `Mẫu #${idx + 1}`;
     }
   });
 
   const textColor = isDark ? '#A3A3A3' : '#737373';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
 
-  const activeLabels = labels.length > 0 ? labels : fallbackLabels;
-
   const data = {
-    labels: activeLabels,
+    labels: labels,
     datasets: [
       {
         label: 'Nhiệt độ Thực tế (°C)',
-        data: ordered.length > 0 ? ordered.map((d) => Number(d.temperature ?? d.temp ?? defaultTargetTemp)) : fallbackTempData,
+        data: ordered.map((d) => Number(d.temperature ?? d.temp ?? 0)),
         borderColor: '#F95716',
         backgroundColor: (context) => {
-          const ctx = context.chart.ctx;
-          const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-          gradient.addColorStop(0, 'rgba(249, 87, 22, 0.28)');
-          gradient.addColorStop(1, 'rgba(249, 87, 22, 0.00)');
-          return gradient;
+          const ctx = context?.chart?.ctx;
+          if (!ctx) return 'rgba(249, 87, 22, 0.15)';
+          try {
+            const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+            gradient.addColorStop(0, 'rgba(249, 87, 22, 0.28)');
+            gradient.addColorStop(1, 'rgba(249, 87, 22, 0.00)');
+            return gradient;
+          } catch {
+            return 'rgba(249, 87, 22, 0.15)';
+          }
         },
         yAxisID: 'yTemp',
         tension: 0.35,
@@ -143,7 +156,7 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
       },
       {
         label: `Ngưỡng Trần (${maxTemp}°C)`,
-        data: activeLabels.map(() => maxTemp),
+        data: labels.map(() => maxTemp),
         borderColor: '#EF4444',
         borderDash: [5, 4],
         yAxisID: 'yTemp',
@@ -153,7 +166,7 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
       },
       {
         label: `Ngưỡng Sàn (${minTemp}°C)`,
-        data: activeLabels.map(() => minTemp),
+        data: labels.map(() => minTemp),
         borderColor: '#0284C7',
         borderDash: [4, 4],
         yAxisID: 'yTemp',
@@ -163,7 +176,7 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
       },
       {
         label: `Khí ${gasType} (ppm)`,
-        data: ordered.length > 0 ? ordered.map((d) => Number(d.gas_ppm ?? d.gas ?? 0.0)) : fallbackGasData,
+        data: ordered.map((d) => Number(d.gas_ppm ?? d.gas_value ?? d.gasPpm ?? d.gas ?? 0.0)),
         borderColor: '#F59E0B',
         backgroundColor: 'transparent',
         yAxisID: 'yGas',
@@ -244,9 +257,13 @@ export function DualAxisTelemetryChart({ telemetryList = [], profile = null, isD
     },
   };
 
+  const chartKey = `chart-${ordered.length}-${labels[0] || 'empty'}-${isDark ? 'dark' : 'light'}`;
+
   return (
     <div className="w-full h-[380px] sm:h-[420px]">
-      <Line data={data} options={options} />
+      <ChartCanvasErrorBoundary>
+        <Line key={chartKey} data={data} options={options} />
+      </ChartCanvasErrorBoundary>
     </div>
   );
 }
@@ -800,7 +817,12 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
     : 'Đã đúc Block #0';
   const currentTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
+  const isRecalled =
+    batchStatus.includes('RECALL') ||
+    batchStatus === 'QC_REJECTED';
+
   const isTransporting =
+    isRecalled ||
     batchStatus === 'IN_TRANSIT' ||
     batchStatus === 'ARRIVED_AT_STORE' ||
     batchStatus === 'DELIVERED' ||
@@ -808,6 +830,7 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
     batchStatus === 'ON_SHELF' ||
     batchStatus === 'SOLD';
   const isArrivedOrLater =
+    isRecalled ||
     batchStatus === 'ARRIVED_AT_STORE' ||
     batchStatus === 'DELIVERED' ||
     batchStatus === 'QC_ACCEPTED' ||
@@ -828,34 +851,56 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
     {
       id: 2,
       name: `Vận Chuyển Xe Lạnh (${vehicleLabel})`,
-      desc: isTransporting
+      desc: isRecalled
+        ? 'Hoàn tất vận chuyển đến cổng tiếp nhận • Đã lưu trữ lịch sử vi khí hậu trên Blockchain'
+        : isTransporting
         ? `Nhiệt độ hiện tại: ${Number(latestTelemetry?.temperature ?? latestTelemetry?.temp ?? 8.7).toFixed(1)}°C • Khí: ${Number(latestTelemetry?.gas_ppm ?? latestTelemetry?.gas_value ?? 0).toFixed(1)} ppm`
         : hasVehicle
           ? 'Chờ tài xế khởi hành chuyến xe • Cảm biến nhiệt độ & khí ở chế độ chờ'
           : 'Chưa phân công xe vận chuyển • Cảm biến chưa kích hoạt',
       status: isArrivedOrLater ? 'COMPLETED' : batchStatus === 'IN_TRANSIT' ? 'ACTIVE' : 'PENDING',
-      time: batchStatus === 'IN_TRANSIT' ? `Cập nhật ${currentTime}` : isArrivedOrLater ? 'Đã bàn giao' : hasVehicle ? 'Chờ rời bến' : 'Chưa phân công',
+      time: isRecalled ? 'Đã giao tới cổng' : batchStatus === 'IN_TRANSIT' ? `Cập nhật ${currentTime}` : isArrivedOrLater ? 'Đã bàn giao' : hasVehicle ? 'Chờ rời bến' : 'Chưa phân công',
     },
     {
       id: 3,
       name: 'Cổng Tiếp Nhận QC Siêu Thị',
-      desc: isQcDone ? 'Đã nghiệm thu đạt chuẩn & Ký số tiếp nhận' : 'Chờ kiểm định đối soát chất lượng 72h',
-      status: isOnShelf ? 'COMPLETED' : isQcDone ? 'COMPLETED' : batchStatus === 'ARRIVED_AT_STORE' || batchStatus === 'DELIVERED' ? 'ACTIVE' : 'PENDING',
-      time: isQcDone ? 'Đã nghiệm thu' : batchStatus === 'ARRIVED_AT_STORE' || batchStatus === 'DELIVERED' ? 'Chờ KCS duyệt' : 'Chờ xe đến cổng',
+      desc: isRecalled
+        ? 'Kiểm định không đạt chuẩn • Đã phát lệnh thu hồi khẩn cấp về nông trại'
+        : isQcDone
+        ? 'Đã nghiệm thu đạt chuẩn & Ký số tiếp nhận'
+        : 'Chờ kiểm định đối soát chất lượng 72h',
+      status: isRecalled
+        ? 'REJECTED'
+        : isOnShelf
+        ? 'COMPLETED'
+        : isQcDone
+        ? 'COMPLETED'
+        : batchStatus === 'ARRIVED_AT_STORE' || batchStatus === 'DELIVERED'
+        ? 'ACTIVE'
+        : 'PENDING',
+      time: isRecalled ? 'Đã thu hồi' : isQcDone ? 'Đã nghiệm thu' : batchStatus === 'ARRIVED_AT_STORE' || batchStatus === 'DELIVERED' ? 'Chờ KCS duyệt' : 'Chờ xe đến cổng',
     },
     {
       id: 4,
       name: 'Kệ Hàng Thông Minh FEFO',
-      desc: isOnShelf ? 'Đã lên quầy kệ • Sắp xếp tối ưu hạn dùng' : 'Chờ phân luồng nhập quầy kệ',
-      status: isSold ? 'COMPLETED' : isOnShelf ? 'ACTIVE' : 'PENDING',
-      time: isOnShelf ? 'Đang trên quầy' : 'Chờ xếp kệ',
+      desc: isRecalled
+        ? 'Đình chỉ nhập kệ • Toàn bộ tem niêm phong số đã bị hủy (SEAL_VOID)'
+        : isOnShelf
+        ? 'Đã lên quầy kệ • Sắp xếp tối ưu hạn dùng'
+        : 'Chờ phân luồng nhập quầy kệ',
+      status: isRecalled ? 'BLOCKED' : isSold ? 'COMPLETED' : isOnShelf ? 'ACTIVE' : 'PENDING',
+      time: isRecalled ? 'Đã hủy' : isOnShelf ? 'Đang trên quầy' : 'Chờ xếp kệ',
     },
     {
       id: 5,
       name: 'Quầy Thu Ngân POS',
-      desc: isSold ? 'Đã thanh toán & Hủy tem niêm phong số' : 'Sẵn sàng phục vụ người tiêu dùng',
-      status: isSold ? 'COMPLETED' : 'PENDING',
-      time: isSold ? 'Đã bán' : 'Sẵn sàng',
+      desc: isRecalled
+        ? 'Đã đưa vào Redis Blacklist • Khóa quẹt mã thanh toán trên toàn hệ thống'
+        : isSold
+        ? 'Đã thanh toán & Hủy tem niêm phong số'
+        : 'Sẵn sàng phục vụ người tiêu dùng',
+      status: isRecalled ? 'BLOCKED' : isSold ? 'COMPLETED' : 'PENDING',
+      time: isRecalled ? 'Khóa POS' : isSold ? 'Đã bán' : 'Sẵn sàng',
     },
   ];
 
@@ -866,22 +911,38 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
       {currentStages.map((st, idx) => {
         const isDone = st.status === 'COMPLETED';
         const isActive = st.status === 'ACTIVE';
-        const statusLabel = isDone ? 'Hoàn thành' : isActive ? 'Đang thực hiện' : 'Chờ xử lý';
+        const isRejected = st.status === 'REJECTED';
+        const isBlocked = st.status === 'BLOCKED';
+        const statusLabel = isDone
+          ? 'Hoàn thành'
+          : isActive
+          ? 'Đang thực hiện'
+          : isRejected
+          ? 'Đã thu hồi'
+          : isBlocked
+          ? 'Đã khóa / Hủy'
+          : 'Chờ xử lý';
         return (
           <div
             key={st.id || idx}
-            className={`flex items-center gap-3.5 p-3.5 rounded-2xl border transition-all ${isActive
+            className={`flex items-center gap-3.5 p-3.5 rounded-2xl border transition-all ${
+              isActive
                 ? 'border-[#F95716]/30 bg-[#F95716]/[0.03] shadow-[0_4px_16px_rgba(249,87,22,0.08)]'
+                : isRejected || isBlocked
+                ? 'border-red-500/20 bg-red-500/[0.03]'
                 : 'border-orange-950/5 dark:border-orange-500/10 bg-white/40 dark:bg-white/[0.02]'
-              }`}
+            }`}
           >
             <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold ${isDone
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold ${
+                isDone
                   ? 'bg-emerald-500 text-white shadow-sm'
                   : isActive
-                    ? 'bg-[#F95716] text-white shadow-[0_4px_12px_rgba(249,87,22,0.30)]'
-                    : 'bg-orange-950/[0.05] dark:bg-white/10 text-neutral-400'
-                }`}
+                  ? 'bg-[#F95716] text-white shadow-[0_4px_12px_rgba(249,87,22,0.30)]'
+                  : isRejected || isBlocked
+                  ? 'bg-red-500 text-white shadow-sm'
+                  : 'bg-orange-950/[0.05] dark:bg-white/10 text-neutral-400'
+              }`}
             >
               {idx + 1}
             </div>
@@ -896,12 +957,15 @@ export function SupplyChainGraphView({ batch = {}, stages = [], latestTelemetry 
               </div>
               <div className="mt-1 flex items-center gap-2">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${isDone
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    isDone
                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                       : isActive
-                        ? 'bg-[#F95716]/10 text-[#F95716]'
-                        : 'bg-orange-950/[0.04] dark:bg-white/5 text-neutral-400'
-                    }`}
+                      ? 'bg-[#F95716]/10 text-[#F95716]'
+                      : isRejected || isBlocked
+                      ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                      : 'bg-orange-950/[0.04] dark:bg-white/5 text-neutral-400'
+                  }`}
                 >
                   {statusLabel}
                 </span>

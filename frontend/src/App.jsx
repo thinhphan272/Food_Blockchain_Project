@@ -135,7 +135,7 @@ function MainDashboardLayout() {
         if (document.body) document.body.classList.remove('dark');
         localStorage.setItem('smartchain_theme_v2', 'light');
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -149,7 +149,7 @@ function MainDashboardLayout() {
         if (document.body) document.body.classList.remove('dark');
         localStorage.setItem('smartchain_theme_v2', 'light');
       }
-    } catch (e) {}
+    } catch (e) { }
   }, [isDark]);
 
   // User & JWT state: Bắt buộc đăng nhập, không có mặc định bypass vào dashboard
@@ -178,7 +178,7 @@ function MainDashboardLayout() {
       if (savedTab && initialAllowedTabs.includes(savedTab)) {
         return savedTab;
       }
-    } catch (e) {}
+    } catch (e) { }
     return initialAllowedTabs[0] || 'overview';
   });
   const [activeRole, setActiveRole] = useState(() => RBAC_ACTORS.find((r) => r.role === initialRole) || RBAC_ACTORS[0]);
@@ -188,7 +188,7 @@ function MainDashboardLayout() {
     if (activeTab) {
       try {
         localStorage.setItem('smartchain_active_tab', activeTab);
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [activeTab]);
 
@@ -281,7 +281,7 @@ function MainDashboardLayout() {
 
         const hasAssigned = Boolean(
           (assignedDriver && !assignedDriver.includes('chưa') && assignedDriver !== '') ||
-            (assignedPlate && !assignedPlate.includes('CHƯA') && assignedPlate !== '')
+          (assignedPlate && !assignedPlate.includes('CHƯA') && assignedPlate !== '')
         );
 
         // Lô chưa được Admin điều phối cho tài xế nào -> Tài xế không tự ý lấy
@@ -331,7 +331,7 @@ function MainDashboardLayout() {
       const matched = accessibleBatches.find((b) => b.batch_code === selectedBatch.batch_code);
       if (!matched) {
         setSelectedBatch(null);
-        try { localStorage.removeItem('smartchain_selected_batch_code'); } catch (e) {}
+        try { localStorage.removeItem('smartchain_selected_batch_code'); } catch (e) { }
       } else if (matched !== selectedBatch) {
         setSelectedBatch(matched);
       }
@@ -349,19 +349,28 @@ function MainDashboardLayout() {
             return;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
-      // Nếu là tài xế (LOGISTICS_DRIVER) mà chưa chọn lô, ưu tiên tự động chọn lô đang chạy IN_TRANSIT
+      // Nếu là tài xế (LOGISTICS_DRIVER) mà chưa chọn lô:
       if (currentUser?.role === 'LOGISTICS_DRIVER') {
+        // 1. Ưu tiên lô đang chạy trên đường (IN_TRANSIT)
         const running = accessibleBatches.find((b) => b.status === 'IN_TRANSIT');
         if (running) {
           setSelectedBatch(running);
           return;
         }
-        if (accessibleBatches.length > 0) {
-          setSelectedBatch(accessibleBatches[0]);
+        // 2. Tiếp theo ưu tiên lô đang chờ chạy trong hàng đợi của tài xế (READY_FOR_PICKUP hoặc ASSIGNED_PENDING)
+        const pending = accessibleBatches.find((b) =>
+          ['READY_FOR_PICKUP', 'ASSIGNED_PENDING'].includes(b.status)
+        );
+        if (pending) {
+          setSelectedBatch(pending);
           return;
         }
+        // 3. Tuyệt đối KHÔNG tự động chọn các lô đã hoàn thành bàn giao (DELIVERED, ON_SHELF, SOLD, RECALLED)
+        // để tránh vòng lặp đếm ngược hoặc tự động nhảy lại lô đã giao xong
+        setSelectedBatch(null);
+        return;
       }
     }
   }, [accessibleBatches, currentUser]);
@@ -408,9 +417,9 @@ function MainDashboardLayout() {
   // Blockchain verification
   const [blockchainVerification, setBlockchainVerification] = useState(null);
 
-  // System Initialization: Chỉ tải dữ liệu lõi khi đã đăng nhập hợp lệ
+  // System Initialization: Tải dữ liệu lõi khi người dùng đăng nhập hoặc token cập nhật
   useEffect(() => {
-    if (currentUser && jwtToken) {
+    if (currentUser) {
       refreshCoreData();
     }
   }, [currentUser, jwtToken]);
@@ -426,6 +435,14 @@ function MainDashboardLayout() {
 
       if (batchRes.status === 'fulfilled' && Array.isArray(batchRes.value)) {
         setBatches(batchRes.value);
+      } else if (batchRes.status === 'rejected') {
+        console.warn('Lần gọi fetchAllBatches đầu tiên gặp lỗi, đang thử lại...');
+        try {
+          const directBatches = await fetchAllBatches();
+          if (Array.isArray(directBatches)) setBatches(directBatches);
+        } catch (e) {
+          console.error('Không thể tải danh sách lô hàng:', e);
+        }
       }
       if (profRes.status === 'fulfilled') setProfiles(profRes.value);
       if (fefoRes.status === 'fulfilled') setFefoQueues(fefoRes.value);
@@ -440,11 +457,11 @@ function MainDashboardLayout() {
     if (selectedBatch?.batch_code) {
       try {
         localStorage.setItem('smartchain_selected_batch_code', selectedBatch.batch_code);
-      } catch (e) {}
+      } catch (e) { }
     } else {
       try {
         localStorage.removeItem('smartchain_selected_batch_code');
-      } catch (e) {}
+      } catch (e) { }
     }
     if (!selectedBatch?.batch_code) {
       setTelemetryList([]);
@@ -480,7 +497,7 @@ function MainDashboardLayout() {
           batchCode: selectedBatch.batch_code,
           categoryCode: selectedBatch.category_code || selectedBatch.category,
           vehiclePlate: plate,
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
   }, [selectedBatch?.batch_code, selectedBatch?.status]);
@@ -491,7 +508,7 @@ function MainDashboardLayout() {
     try {
       const socket = new SockJS('http://localhost:8080/ws-smartchain');
       stompClient = Stomp.over(socket);
-      stompClient.debug = () => {};
+      stompClient.debug = () => { };
       stompClient.connect(
         {},
         () => {
@@ -645,6 +662,31 @@ function MainDashboardLayout() {
                     type: 'success',
                     message: body.message || `ĐÃ ĐÓNG CỬA THÙNG XE: Cửa thùng xe ${body.vehiclePlate || ''} (Lô ${body.batchCode}) đã được đóng kín và khóa an toàn.`,
                   });
+                } else if (body.event === 'QC_APPROVED') {
+                  setSystemAlert({
+                    type: 'success',
+                    message: `KIỂM ĐỊNH KCS ĐẠT: Lô hàng ${body.batchCode} đã được KCS nghiệm thu đạt chuẩn! Sẵn sàng đưa lên quầy kệ bán hàng.`,
+                  });
+                } else if (body.event === 'QC_REJECTED') {
+                  setSystemAlert({
+                    type: 'danger',
+                    message: `KIỂM ĐỊNH KCS TỪ CHỐI: Lô hàng ${body.batchCode} không đạt chuẩn chất lượng và đã bị từ chối nhập kho!`,
+                  });
+                } else if (body.event === 'SHELF_STOCKED') {
+                  setSystemAlert({
+                    type: 'success',
+                    message: `ĐÃ LÊN KỆ THÔNG MINH: Lô hàng ${body.batchCode} đã được xếp vào "${body.shelfName || 'Kệ FEFO'}" và mở bán!`,
+                  });
+                } else if (body.event === 'POS_ITEM_SOLD') {
+                  setSystemAlert({
+                    type: 'success',
+                    message: `THANH TOÁN THÀNH CÔNG: Tem QR ${body.serialCode} của lô ${body.batchCode} đã được bán và hủy niêm phong hợp lệ!`,
+                  });
+                } else if (body.event === 'EMERGENCY_RECALL') {
+                  setSystemAlert({
+                    type: 'danger',
+                    message: `BÁO ĐỘNG THU HỒI KHẨN CẤP: Lô hàng ${body.batchCode} đã bị kích hoạt lệnh thu hồi trên toàn hệ thống! (${body.reason || ''})`,
+                  });
                 }
               }
             } catch (e) {
@@ -701,8 +743,8 @@ function MainDashboardLayout() {
       if (res?.token) {
         const effectivePortal =
           location.pathname.startsWith('/admin') ? 'admin' :
-          location.pathname.startsWith('/enterprise') ? 'enterprise' :
-          location.pathname.startsWith('/consumer') ? 'consumer' : authPortalMode;
+            location.pathname.startsWith('/enterprise') ? 'enterprise' :
+              location.pathname.startsWith('/consumer') ? 'consumer' : authPortalMode;
 
         if (effectivePortal === 'admin' && res.role !== 'ADMIN') {
           setAuthError(`Cổng Quản Trị chỉ chấp nhận tài khoản Quản trị viên (ADMIN)! Tài khoản của bạn có vai trò [${res.role}], vui lòng chuyển sang Cổng Doanh Nghiệp hoặc Khách Hàng.`);
@@ -759,11 +801,11 @@ function MainDashboardLayout() {
           if (savedTab && allowed.includes(savedTab)) {
             targetTab = savedTab;
           }
-        } catch (e) {}
+        } catch (e) { }
         setActiveTab(targetTab);
         try {
           localStorage.setItem('smartchain_active_tab', targetTab);
-        } catch (e) {}
+        } catch (e) { }
         navigate('/');
         setSystemAlert({
           type: 'success',
@@ -825,7 +867,7 @@ function MainDashboardLayout() {
         localStorage.setItem('smartchain_user', JSON.stringify(usr));
         const matchingActor = RBAC_ACTORS.find((r) => r.role === 'CONSUMER') || RBAC_ACTORS[7];
         setActiveRole(matchingActor);
-        setActiveTab('overview');
+        setActiveTab('trace');
         navigate('/');
         setSystemAlert({
           type: 'success',
@@ -870,7 +912,7 @@ function MainDashboardLayout() {
 
         const matchingActor = RBAC_ACTORS.find((r) => r.role === 'CONSUMER') || RBAC_ACTORS[7];
         setActiveRole(matchingActor);
-        setActiveTab('overview');
+        setActiveTab('trace');
         navigate('/');
         setSystemAlert({
           type: 'success',
@@ -917,7 +959,7 @@ function MainDashboardLayout() {
     setSearchQuery(q);
     setSearchHistory((prev) => {
       const next = [q, ...prev.filter((item) => item.toLowerCase() !== q.toLowerCase())].slice(0, 8);
-      try { localStorage.setItem('smartchain_search_history', JSON.stringify(next)); } catch (e) {}
+      try { localStorage.setItem('smartchain_search_history', JSON.stringify(next)); } catch (e) { }
       return next;
     });
     setIsSearchHistoryOpen(false);
@@ -955,7 +997,7 @@ function MainDashboardLayout() {
 
   const handleClearSearchHistory = () => {
     setSearchHistory([]);
-    try { localStorage.removeItem('smartchain_search_history'); } catch (e) {}
+    try { localStorage.removeItem('smartchain_search_history'); } catch (e) { }
   };
 
   // User Management Handlers
@@ -1285,12 +1327,25 @@ function MainDashboardLayout() {
         decision,
         inspectorNotes: qcSignatureNote,
       });
-      setSystemAlert(`Smart Contract: Đã ký duyệt ${decision} lô hàng ${selectedBatch.batch_code}! Hash: ${res.txHash || 'ECDSA-OK'}`);
+      const newStatus = res.status || (['ACCEPT', 'ACCEPTED', 'APPROVE'].includes(decision) ? 'QC_ACCEPTED' : 'QC_REJECTED');
+      setSelectedBatch((prev) => prev ? {
+        ...prev,
+        status: newStatus,
+        qc_inspection: res.qcInspection || { decision: ['ACCEPT', 'ACCEPTED', 'APPROVE'].includes(decision) ? 'ACCEPTED' : 'REJECTED' },
+        qcInspection: res.qcInspection || { decision: ['ACCEPT', 'ACCEPTED', 'APPROVE'].includes(decision) ? 'ACCEPTED' : 'REJECTED' },
+      } : prev);
+      setSystemAlert({
+        type: 'success',
+        message: `Smart Contract: Đã ký duyệt ${decision} lô hàng ${selectedBatch.batch_code}! Trạng thái hiện tại: ${newStatus}`,
+      });
       setTimeout(() => setSystemAlert(null), 7000);
       handleRunQcAudit();
-      refreshCoreData();
+      await refreshCoreData();
     } catch (err) {
-      setSystemAlert(`Lỗi ký duyệt Smart Contract: ${err.message}`);
+      setSystemAlert({
+        type: 'danger',
+        message: `Lỗi ký duyệt Smart Contract: ${err.message}`,
+      });
     }
   };
 
@@ -1298,11 +1353,18 @@ function MainDashboardLayout() {
     if (!selectedBatch?.batch_code) return;
     try {
       await stockShelfFefo(selectedBatch.batch_code, 'KE-THUC-PHAM-A1');
-      setSystemAlert(`Đã nhập lô ${selectedBatch.batch_code} vào Kệ Kép FEFO (Redis ZSET)!`);
+      setSelectedBatch((prev) => prev ? { ...prev, status: 'ON_SHELF' } : prev);
+      setSystemAlert({
+        type: 'success',
+        message: `Đã nhập lô ${selectedBatch.batch_code} vào Kệ Kép FEFO (Redis ZSET)! Trạng thái: Đang trên kệ`,
+      });
       setTimeout(() => setSystemAlert(null), 5000);
-      refreshCoreData();
+      await refreshCoreData();
     } catch (err) {
-      setSystemAlert(`Lỗi nhập kệ FEFO: ${err.message}`);
+      setSystemAlert({
+        type: 'danger',
+        message: `Lỗi nhập kệ FEFO: ${err.message}`,
+      });
     }
   };
 
@@ -1338,13 +1400,40 @@ function MainDashboardLayout() {
   };
 
   // Dynamic Telemetry Metrics & TTI
-  const selectedProfile = profiles.find((p) => p.categoryCode === selectedBatch?.category_code);
-  const currentTemp = Number(latestTelemetry?.temperature ?? latestTelemetry?.temp ?? 9.5);
-  const currentGas = Number(latestTelemetry?.gas_ppm ?? latestTelemetry?.gas_value ?? latestTelemetry?.gasPpm ?? 0.0);
+  const selectedCategoryCode = String(selectedBatch?.category || selectedBatch?.category_code || selectedBatch?.categoryCode || 'VEG_FRUIT').toUpperCase();
+  const selectedProfile = profiles.find((p) => String(p.categoryCode || p.category_code || p.id || '').toUpperCase() === selectedCategoryCode);
+
+  const batchStatusUpper = String(selectedBatch?.status || '').toUpperCase();
+  const isHistoricalBatch = ['ARRIVED_AT_STORE', 'DELIVERED', 'QC_ACCEPTED', 'ON_SHELF', 'SOLD', 'RECALLED'].includes(batchStatusUpper);
+  const isTransitBatch = batchStatusUpper === 'IN_TRANSIT';
+
+  // Tính toán nhiệt độ & nồng độ khí trung bình thực tế suốt hành trình từ telemetryList
+  const avgHistoricalTemp = telemetryList.length > 0
+    ? Number((telemetryList.reduce((acc, t) => acc + Number(t.temperature ?? t.temp ?? 0), 0) / telemetryList.length).toFixed(1))
+    : null;
+  const avgHistoricalGas = telemetryList.length > 0
+    ? Number((telemetryList.reduce((acc, t) => acc + Number(t.gas_ppm ?? t.gas_value ?? t.gasPpm ?? 0), 0) / telemetryList.length).toFixed(1))
+    : null;
+
   const minAllowedTemp = Number(selectedProfile?.minTemp ?? 8.0);
   const maxAllowedTemp = Number(selectedProfile?.maxTemp ?? 12.0);
   const maxAllowedGas = Number(selectedProfile?.maxGas ?? 30.0);
-  const currentCategory = selectedProfile?.categoryCode ?? 'VEG_FRUIT';
+  const currentCategory = selectedProfile?.categoryCode ?? selectedCategoryCode;
+
+  const defaultCategoryTargetTemp = Number(((minAllowedTemp + maxAllowedTemp) / 2).toFixed(1));
+
+  const currentTemp = isHistoricalBatch && avgHistoricalTemp !== null
+    ? avgHistoricalTemp
+    : Number(latestTelemetry?.temperature ?? latestTelemetry?.temp ?? defaultCategoryTargetTemp);
+
+  const currentGas = isHistoricalBatch && avgHistoricalGas !== null
+    ? avgHistoricalGas
+    : Number(latestTelemetry?.gas_ppm ?? latestTelemetry?.gas_value ?? latestTelemetry?.gasPpm ?? 0.0);
+
+  const tempSpikeCount = (telemetryList || []).filter((t) => {
+    const temp = Number(t.temperature ?? t.temp ?? 0);
+    return temp > maxAllowedTemp || temp < minAllowedTemp;
+  }).length;
 
   let tempCompliancePct = 100;
   if (currentTemp > maxAllowedTemp) {
@@ -1384,8 +1473,26 @@ function MainDashboardLayout() {
 
   const ttiDisplay = `${calculatedTti.toFixed(1)}%`;
   const ttiDelta = calculatedTti >= 90 ? 'Tối ưu' : calculatedTti >= 75 ? 'Khá' : calculatedTti >= 60 ? 'Cần chú ý' : 'Nguy cơ hủy';
-  const tempStatusText = currentTemp > maxAllowedTemp ? 'Quá nhiệt' : currentTemp < minAllowedTemp ? 'Tổn thương lạnh' : 'An toàn';
-  const gasStatusText = (maxAllowedGas > 0 && currentGas > maxAllowedGas) ? 'Vượt ngưỡng' : 'Ổn định';
+
+  let tempStatusText = 'An toàn';
+  if (isHistoricalBatch) {
+    if (tempSpikeCount > 0) {
+      tempStatusText = `Ghi nhận ${tempSpikeCount} lần vượt ngưỡng`;
+    } else {
+      tempStatusText = `TB Chuẩn (${minAllowedTemp}°C – ${maxAllowedTemp}°C)`;
+    }
+  } else if (currentTemp > maxAllowedTemp) {
+    tempStatusText = `Vượt ngưỡng trần (${maxAllowedTemp}°C)`;
+  } else if (currentTemp < minAllowedTemp) {
+    tempStatusText = `Thấp hơn ngưỡng sàn (${minAllowedTemp}°C)`;
+  }
+
+  let gasStatusText = 'Ổn định';
+  if (isHistoricalBatch) {
+    gasStatusText = `Khí ${selectedProfile?.gasType || 'an toàn'} ổn định`;
+  } else if (maxAllowedGas > 0 && currentGas > maxAllowedGas) {
+    gasStatusText = `Vượt ngưỡng (${maxAllowedGas} ppm)`;
+  }
 
   const userRole = currentUser?.role || 'CONSUMER';
   const allowedTabIds = ROLE_ALLOWED_TABS[userRole] || ['overview', 'trace'];
@@ -1508,13 +1615,12 @@ function MainDashboardLayout() {
         {/* Global System Alert Banner */}
         {systemAlert && (
           <div
-            className={`mx-6 mt-4 flex items-center justify-between gap-3 rounded-2xl px-5 py-3 text-sm font-semibold shadow-md transition-all ${
-              typeof systemAlert === 'object' && systemAlert.type === 'danger'
-                ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-400'
-                : typeof systemAlert === 'object' && systemAlert.type === 'warning'
+            className={`mx-6 mt-4 flex items-center justify-between gap-3 rounded-2xl px-5 py-3 text-sm font-semibold shadow-md transition-all ${typeof systemAlert === 'object' && systemAlert.type === 'danger'
+              ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-400'
+              : typeof systemAlert === 'object' && systemAlert.type === 'warning'
                 ? 'bg-amber-500/15 text-amber-700 border border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-400'
                 : 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-400'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2.5">
               <AlertTriangle size={18} className="shrink-0" />
@@ -1560,6 +1666,8 @@ function MainDashboardLayout() {
               ttiDelta={ttiDelta}
               tempStatusText={tempStatusText}
               gasStatusText={gasStatusText}
+              isHistorical={isHistoricalBatch}
+              tempSpikeCount={tempSpikeCount}
               getCassandraCsvExportUrl={getCassandraCsvExportUrl}
             />
           )}

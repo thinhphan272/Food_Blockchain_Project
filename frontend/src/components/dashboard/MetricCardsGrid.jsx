@@ -21,6 +21,8 @@ export default function MetricCardsGrid({
   latestTelemetry = null,
   selectedBatch = null,
   isLive = false,
+  isHistorical = false,
+  tempSpikeCount = 0,
 }) {
   const hasTemp = isLive && currentTemp !== null && currentTemp !== undefined && !Number.isNaN(Number(currentTemp));
   const hasGas = isLive && currentGas !== null && currentGas !== undefined && !Number.isNaN(Number(currentGas));
@@ -28,7 +30,9 @@ export default function MetricCardsGrid({
   const gasNum = hasGas ? Number(currentGas) : 0;
 
   const batchWeight =
-    selectedBatch?.weight_kg && Number(selectedBatch.weight_kg) >= 50
+    selectedBatch?.total_weight_kg && Number(selectedBatch.total_weight_kg) >= 50
+      ? Number(selectedBatch.total_weight_kg)
+      : selectedBatch?.weight_kg && Number(selectedBatch.weight_kg) >= 50
       ? Number(selectedBatch.weight_kg)
       : selectedBatch?.unit_weight_kg
       ? Number(selectedBatch.unit_weight_kg) * (Number(selectedBatch.unit_count) || 1)
@@ -37,11 +41,13 @@ export default function MetricCardsGrid({
   const displayWeight =
     isLive && latestTelemetry?.weight_kg && Number(latestTelemetry.weight_kg) > 50
       ? Number(latestTelemetry.weight_kg)
-      : batchWeight;
+      : (Number(batchWeight) || 500.0);
+
+  const safeDisplayWeight = Number(displayWeight) || 500.0;
 
   const metrics = [
     {
-      label: 'Nhiệt độ',
+      label: isHistorical ? 'Nhiệt độ (TB Hành trình)' : 'Nhiệt độ',
       value: hasTemp ? `${tempNum.toFixed(1)}°C` : '—',
       delta: hasTemp ? tempStatusText : 'Chờ chuyến xe khởi hành',
       up: !hasTemp || (tempNum >= minAllowedTemp && tempNum <= maxAllowedTemp),
@@ -49,7 +55,7 @@ export default function MetricCardsGrid({
       tint: '#F95716',
     },
     {
-      label: 'Khí sinh học',
+      label: isHistorical ? 'Khí sinh học (TB)' : 'Khí sinh học',
       value: hasGas ? `${gasNum.toFixed(1)} ppm` : '—',
       delta: hasGas ? gasStatusText : 'Chờ chuyến xe khởi hành',
       up: !hasGas || (maxAllowedGas <= 0 || gasNum <= maxAllowedGas),
@@ -66,7 +72,7 @@ export default function MetricCardsGrid({
     },
     {
       label: 'Khối lượng hàng hóa',
-      value: `${displayWeight.toFixed(isLive ? 1 : 0)} kg`,
+      value: `${safeDisplayWeight.toFixed(isLive ? 1 : 0)} kg`,
       delta: isLive ? 'Tải trọng cân cảm biến' : 'Khối lượng lô hàng khai báo',
       up: true,
       icon: Box,

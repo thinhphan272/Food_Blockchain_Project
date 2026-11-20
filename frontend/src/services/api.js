@@ -35,6 +35,17 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      console.warn('[SmartChain Auth] Token JWT đã hết hạn hoặc không hợp lệ (401). Đang làm sạch...');
+      localStorage.removeItem('smartchain_jwt_token');
+    }
+    return Promise.reject(error);
+  }
+);
+
 // 1. Authentication & RBAC (MySQL)
 export const loginUser = async (username, password) => {
   const res = await apiClient.post('/auth/login', { username, password });
@@ -140,6 +151,11 @@ export const generateItemQrCodes = async (batchCode, payload) => {
 
 export const getBatchScanHistory = async (batchCode) => {
   const res = await apiClient.get(`/batches/${batchCode}/scan-history`);
+  return res.data;
+};
+
+export const confirmRecallByProducer = async (batchCode, payload = {}) => {
+  const res = await apiClient.post(`/batches/${batchCode}/confirm-recall`, payload);
   return res.data;
 };
 
