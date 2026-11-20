@@ -40,9 +40,20 @@ CATEGORY_PROFILES = {
     "DELI_HOT": {"min_temp": 60.0, "max_temp": 75.0, "gas_type": "NONE", "max_gas": 0.0},
 }
 
+import unicodedata
+
+def clean_ascii(s):
+    if not s:
+        return ""
+    text = "".join(
+        c for c in unicodedata.normalize('NFKD', str(s))
+        if not unicodedata.combining(c)
+    )
+    return text.replace("Đ", "D").replace("đ", "d").strip()
+
 def fetch_active_in_transit_profile():
     try:
-        url = "http://127.0.0.1:8080/api/workflow/batches"
+        url = "http://127.0.0.1:8080/api/v1/batches"
         req = urllib.request.Request(url, headers={'User-Agent': 'WokwiBridge/1.0'})
         with urllib.request.urlopen(req, timeout=2.5) as resp:
             if resp.status == 200:
@@ -51,6 +62,7 @@ def fetch_active_in_transit_profile():
                     if b.get("status") == "IN_TRANSIT":
                         b_code = b.get("batchCode") or b.get("batch_code")
                         b_prod = b.get("productName") or b.get("product_name") or "Thuc pham"
+                        b_prod_clean = clean_ascii(b_prod)[:25]
                         b_cat = (b.get("category") or b.get("category_code") or "VEG_FRUIT").upper()
                         tj = b.get("transportJourney") or b.get("transport_journey") or {}
                         plate = tj.get("vehicle_plate") or "49C-567.89"
@@ -58,7 +70,7 @@ def fetch_active_in_transit_profile():
                         payload = json.dumps({
                             "command": "SET_PROFILE",
                             "batch_code": b_code,
-                            "product_name": b_prod,
+                            "product_name": b_prod_clean,
                             "category": b_cat,
                             "min_temp": prof["min_temp"],
                             "max_temp": prof["max_temp"],
@@ -68,9 +80,20 @@ def fetch_active_in_transit_profile():
                             "device_id": "ESP32-MULTI-01"
                         })
                         return payload
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[BRIDGE FETCH ERR] {e}")
     return None
+
+def send_to_wokwi(payload_str):
+    with serial_lock:
+        if serial_sock:
+            try:
+                line = payload_str.strip() + "\n"
+                serial_sock.sendall(line.encode('utf-8'))
+                return True
+            except Exception as e:
+                print(f"[BRIDGE SEND ERR] {e}")
+    return False
 
 def on_mqtt_connect(client, userdata, flags, rc):
     print(f"[MQTT] Connected to {MQTT_BROKER}:{MQTT_PORT} (rc={rc})")
@@ -91,14 +114,20 @@ def on_mqtt_message(client, userdata, msg):
     print(f"[HIVEMQ -> WOKWI CMD] {msg.topic}: {payload}")
     if "END_TRIP" in payload or "RESET_PROFILE" in payload or '"STANDBY"' in payload:
         last_profile_payload = None
+        send_to_wokwi(payload)
     elif "SET_PROFILE" in payload or "batch_code" in payload:
-        last_profile_payload = payload
-    with serial_lock:
-        if serial_sock:
-            try:
-                serial_sock.sendall((payload + "\n").encode('utf-8'))
-            except Exception as e:
-                print(f"[BRIDGE ERROR] Failed to send to Wokwi: {e}")
+        # Làm sạch các ký tự tiếng Việt có dấu để Wokwi SSD1306 và UART parse an toàn
+        try:
+            parsed = json.loads(payload)
+            if "product_name" in parsed:
+                parsed["product_name"] = clean_ascii(parsed["product_name"])[:25]
+            clean_payload = json.dumps(parsed)
+        except Exception:
+            clean_payload = payload
+        last_profile_payload = clean_payload
+        send_to_wokwi(clean_payload)
+    else:
+        send_to_wokwi(payload)
 
 mqtt_client = mqtt.Client()
 mqtt_client.on_connect = on_mqtt_connect
@@ -140,26 +169,7 @@ def run_bridge():
             s.settimeout(None)
             with serial_lock:
                 serial_sock = s
-            print("[BRIDGE] Connected to Wokwi Serial Port (RFC2217)! Streaming live sensor data...")
-
-            # Nếu đã có cấu hình lô hàng từ Web hoặc Backend đang có lô IN_TRANSIT, đẩy ngay xuống Wokwi khi vừa kết nối
-            def push_cached_profile():
-                global last_profile_payload
-                time.sleep(1.5)
-                payload_to_push = last_profile_payload
-                if not payload_to_push:
-                    payload_to_push = fetch_active_in_transit_profile()
-                    if payload_to_push:
-                        last_profile_payload = payload_to_push
-                if payload_to_push:
-                    with serial_lock:
-                        if serial_sock:
-                            try:
-                                serial_sock.sendall((payload_to_push + "\n").encode('utf-8'))
-                                print(f"[BRIDGE -> WOKWI] Auto-synced active batch profile to Wokwi: {payload_to_push}")
-                            except Exception as e:
-                                print(f"[BRIDGE -> WOKWI ERR] {e}")
-            threading.Thread(target=push_cached_profile, daemon=True).start()
+            print("[BRIDGE] Connected to Wokwi Serial Port (RFC2217)! Thiết bị ở chế độ STANDBY chờ tài xế bấm Bắt đầu chuyến xe trên Web.")
 
             buffer = ""
             while True:
@@ -213,6 +223,8 @@ def run_bridge():
                                 print(f"[JSON PARSE WARN] {parse_err}: {raw_json}")
                     elif "[OFFLINE" in line or "[ONLINE" in line or "[ACTUATION]" in line or "[OLED]" in line or "Ket noi" in line or "[SYSTEM]" in line:
                         print(f"[WOKWI LOG] {line}")
+                    else:
+                        print(f"[WOKWI RAW] {line}")
 
         except ConnectionRefusedError:
             time.sleep(2)
