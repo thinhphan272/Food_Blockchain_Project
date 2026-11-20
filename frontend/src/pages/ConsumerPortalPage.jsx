@@ -31,8 +31,8 @@ import {
 import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaResolver';
 import { traceByCode } from '../services/api';
 
-const CURRENT_WIFI_LAN_IP = '172.17.74.89';
-const DEFAULT_PUBLIC_TUNNEL_URL = 'https://canberra-university-sells-pixel.trycloudflare.com';
+const CURRENT_WIFI_LAN_IP = '192.168.10.104';
+const DEFAULT_PUBLIC_TUNNEL_URL = 'https://knowledgestorm-polyphonic-qualifications-howard.trycloudflare.com';
 
 const CATEGORY_TEMP_RANGES = {
   VEG_FRUIT: '8 - 12°C',
@@ -135,12 +135,23 @@ export default function ConsumerPortalPage({
     }
   });
 
-  // Cấu hình máy chủ công khai (Mặc định là Cloudflare Tunnel chính thức để điện thoại quét luôn mở được)
+  // Cấu hình máy chủ công khai (Tự động đồng bộ từ Cloudflare Tunnel hoặc Wi-Fi)
   const [customHost, setCustomHost] = useState(() => {
+    // Nếu đang truy cập qua domain trycloudflare.com thì dùng ngay window.location.origin
+    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname.endsWith('.trycloudflare.com')) {
+      return window.location.origin;
+    }
     try {
       const saved = localStorage.getItem('smartchain_custom_host');
-      if (saved && saved.trim()) return saved.trim();
-    } catch (e) {}
+      if (
+        saved &&
+        saved.trim() &&
+        !saved.includes('artists-consist-hudson-brother') &&
+        !saved.includes('examine-ensures-supporting-tennessee')
+      ) {
+        return saved.trim();
+      }
+    } catch (e) { }
     if (
       typeof window !== 'undefined' &&
       window.location.hostname &&
@@ -151,6 +162,37 @@ export default function ConsumerPortalPage({
     }
     return DEFAULT_PUBLIC_TUNNEL_URL;
   });
+
+  // Tự động kiểm tra file active_tunnel.json định kỳ để nhận link Cloudflare Tunnel mới nhất
+  useEffect(() => {
+    const syncActiveTunnel = () => {
+      fetch('/active_tunnel.json?t=' + Date.now())
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.tunnelUrl && data.active) {
+            setCustomHost((prev) => {
+              if (
+                !prev ||
+                prev.includes('trycloudflare.com') ||
+                prev.includes('localhost') ||
+                prev.includes('127.0.0.1')
+              ) {
+                if (prev !== data.tunnelUrl) {
+                  try { localStorage.setItem('smartchain_custom_host', data.tunnelUrl); } catch (e) { }
+                  return data.tunnelUrl;
+                }
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => { });
+    };
+
+    syncActiveTunnel();
+    const interval = setInterval(syncActiveTunnel, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Lọc danh sách mặt hàng đang bày bán trên quầy kệ siêu thị Co.opmart
   const availableShelfBatches = React.useMemo(() => {
@@ -297,14 +339,14 @@ export default function ConsumerPortalPage({
       setUserPoints(newPoints);
       try {
         localStorage.setItem(`smartchain_consumer_points_${userKey}`, String(newPoints));
-      } catch (e) {}
+      } catch (e) { }
       setToastMessage(`✓ Đã lưu vào sổ tay tra cứu! +10 điểm tích lũy thành viên.`);
     }
 
     setUserHistory(updatedHistory);
     try {
       localStorage.setItem(`smartchain_consumer_history_${userKey}`, JSON.stringify(updatedHistory));
-    } catch (e) {}
+    } catch (e) { }
 
     setTimeout(() => setToastMessage(''), 3500);
   };
@@ -315,7 +357,7 @@ export default function ConsumerPortalPage({
     setUserHistory(nextHistory);
     try {
       localStorage.setItem(`smartchain_consumer_history_${userKey}`, JSON.stringify(nextHistory));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   // Xóa toàn bộ lịch sử
@@ -324,7 +366,7 @@ export default function ConsumerPortalPage({
       setUserHistory([]);
       try {
         localStorage.removeItem(`smartchain_consumer_history_${userKey}`);
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
@@ -334,7 +376,7 @@ export default function ConsumerPortalPage({
       if (scannerRef.current) {
         try {
           scannerRef.current.clear();
-        } catch (e) {}
+        } catch (e) { }
       }
       setIsCameraActive(false);
     } else {
@@ -467,33 +509,30 @@ export default function ConsumerPortalPage({
           <button
             type="button"
             onClick={() => setActiveConsumerTab('trace')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeConsumerTab === 'trace'
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${activeConsumerTab === 'trace'
                 ? 'bg-[#F95716] text-white shadow-md'
                 : 'text-neutral-600 dark:text-neutral-300 hover:text-[#F95716]'
-            }`}
+              }`}
           >
             <QrCode size={14} /> Tra Cứu Tem QR
           </button>
           <button
             type="button"
             onClick={() => setActiveConsumerTab('history')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeConsumerTab === 'history'
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${activeConsumerTab === 'history'
                 ? 'bg-[#F95716] text-white shadow-md'
                 : 'text-neutral-600 dark:text-neutral-300 hover:text-[#F95716]'
-            }`}
+              }`}
           >
             <ShoppingCart size={14} /> Sổ Tay Tra Cứu ({userHistory.length})
           </button>
           <button
             type="button"
             onClick={() => setActiveConsumerTab('profile')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
-              activeConsumerTab === 'profile'
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${activeConsumerTab === 'profile'
                 ? 'bg-[#F95716] text-white shadow-md'
                 : 'text-neutral-600 dark:text-neutral-300 hover:text-[#F95716]'
-            }`}
+              }`}
           >
             <UserCheck size={14} /> Thẻ Thành Viên & Hồ Sơ
           </button>
@@ -540,27 +579,24 @@ export default function ConsumerPortalPage({
         <button
           type="button"
           onClick={() => setActiveConsumerTab('trace')}
-          className={`flex items-center gap-1.5 py-2 px-3 rounded-lg ${
-            activeConsumerTab === 'trace' ? 'bg-[#F95716] text-white' : 'text-neutral-500'
-          }`}
+          className={`flex items-center gap-1.5 py-2 px-3 rounded-lg ${activeConsumerTab === 'trace' ? 'bg-[#F95716] text-white' : 'text-neutral-500'
+            }`}
         >
           <QrCode size={13} /> Tra Cứu
         </button>
         <button
           type="button"
           onClick={() => setActiveConsumerTab('history')}
-          className={`flex items-center gap-1.5 py-2 px-3 rounded-lg ${
-            activeConsumerTab === 'history' ? 'bg-[#F95716] text-white' : 'text-neutral-500'
-          }`}
+          className={`flex items-center gap-1.5 py-2 px-3 rounded-lg ${activeConsumerTab === 'history' ? 'bg-[#F95716] text-white' : 'text-neutral-500'
+            }`}
         >
           <ShoppingCart size={13} /> Sổ Tay ({userHistory.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveConsumerTab('profile')}
-          className={`flex items-center gap-1.5 py-2 px-3 rounded-lg ${
-            activeConsumerTab === 'profile' ? 'bg-[#F95716] text-white' : 'text-neutral-500'
-          }`}
+          className={`flex items-center gap-1.5 py-2 px-3 rounded-lg ${activeConsumerTab === 'profile' ? 'bg-[#F95716] text-white' : 'text-neutral-500'
+            }`}
         >
           <UserCheck size={13} /> Thẻ Thành Viên
         </button>
@@ -674,11 +710,10 @@ export default function ConsumerPortalPage({
                         setInputCode(b.batch_code);
                         handleExecuteSearch(b.batch_code);
                       }}
-                      className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs cursor-pointer flex items-center gap-1.5 ${
-                        isSelected
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all text-xs cursor-pointer flex items-center gap-1.5 ${isSelected
                           ? 'bg-[#F95716] text-white shadow-sm'
                           : 'bg-neutral-100 dark:bg-white/[0.05] hover:bg-neutral-200 dark:hover:bg-white/10 text-neutral-700 dark:text-neutral-200'
-                      }`}
+                        }`}
                     >
                       <span className="font-mono">{b.batch_code}</span>
                       <span className="text-[11px] opacity-80">&bull; {b.product_name || b.productName}</span>
@@ -762,7 +797,7 @@ export default function ConsumerPortalPage({
                   {/* Xe Vận Chuyển: Biển số vàng kinh doanh vận tải */}
                   <div className="p-4 rounded-2xl bg-neutral-50/70 dark:bg-white/[0.02] border border-orange-950/5 dark:border-white/5 flex flex-col items-center justify-between text-center">
                     <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider block">Xe Vận Chuyển</span>
-                    
+
                     {/* Biển số vàng kinh doanh vận tải chuẩn Việt Nam */}
                     <div className="my-1.5 relative inline-flex items-center justify-center px-3 py-1 rounded-xl bg-[#F6C343] border-2 border-neutral-900 shadow-sm">
                       <div className="absolute top-1 left-2 w-1 h-1 rounded-full bg-neutral-900/60" />
@@ -945,15 +980,14 @@ export default function ConsumerPortalPage({
                         onClick={() => {
                           const wifiUrl = `http://${CURRENT_WIFI_LAN_IP}:5173`;
                           setCustomHost(wifiUrl);
-                          try { localStorage.setItem('smartchain_custom_host', wifiUrl); } catch (e) {}
+                          try { localStorage.setItem('smartchain_custom_host', wifiUrl); } catch (e) { }
                           setToastMessage(`✓ Đã chuyển sang chế độ Wi-Fi: ${CURRENT_WIFI_LAN_IP}`);
                           setTimeout(() => setToastMessage(''), 2500);
                         }}
-                        className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${
-                          customHost.includes(CURRENT_WIFI_LAN_IP)
+                        className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${customHost.includes(CURRENT_WIFI_LAN_IP)
                             ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shadow-sm'
                             : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
-                        }`}
+                          }`}
                         title="Dành cho điện thoại kết nối chung mạng Wi-Fi với máy tính (Rất ổn định, không lo lỗi mạng)"
                       >
                         📡 Wi-Fi ({CURRENT_WIFI_LAN_IP})
@@ -962,16 +996,23 @@ export default function ConsumerPortalPage({
                       <button
                         type="button"
                         onClick={() => {
-                          setCustomHost(DEFAULT_PUBLIC_TUNNEL_URL);
-                          try { localStorage.setItem('smartchain_custom_host', DEFAULT_PUBLIC_TUNNEL_URL); } catch (e) {}
-                          setToastMessage('✓ Đã chọn chế độ Cloudflare Tunnel');
-                          setTimeout(() => setToastMessage(''), 2500);
+                          fetch('/active_tunnel.json?t=' + Date.now())
+                            .then((res) => (res.ok ? res.json() : null))
+                            .then((data) => {
+                              const targetUrl = (data && data.tunnelUrl) || DEFAULT_PUBLIC_TUNNEL_URL;
+                              setCustomHost(targetUrl);
+                              try { localStorage.setItem('smartchain_custom_host', targetUrl); } catch (e) { }
+                              setToastMessage('✓ Đã đồng bộ link Cloudflare Tunnel mới nhất');
+                              setTimeout(() => setToastMessage(''), 2500);
+                            })
+                            .catch(() => {
+                              setCustomHost(DEFAULT_PUBLIC_TUNNEL_URL);
+                            });
                         }}
-                        className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${
-                          customHost.includes('trycloudflare.com')
+                        className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${customHost.includes('trycloudflare.com')
                             ? 'bg-orange-500/15 text-[#F95716] border-orange-500/30 shadow-sm'
                             : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
-                        }`}
+                          }`}
                         title="Dành cho điện thoại dùng mạng 4G/5G hoặc ở xa qua Internet"
                       >
                         ☁️ Cloudflare (4G/5G)
@@ -986,15 +1027,12 @@ export default function ConsumerPortalPage({
                         setCustomHost(val);
                         try {
                           localStorage.setItem('smartchain_custom_host', val);
-                        } catch (err) {}
+                        } catch (err) { }
                       }}
                       placeholder="Nhập IP LAN hoặc link tunnel..."
                       className="w-full rounded-xl border border-orange-950/10 dark:border-orange-500/20 bg-neutral-50 dark:bg-black/30 px-3 py-1.5 font-mono text-[11px] font-bold text-[#F95716] focus:outline-none focus:border-[#F95716]"
                     />
-                    <p className="text-[9.5px] text-neutral-400 leading-tight">
-                      • <strong>Cùng Wi-Fi:</strong> Bấm nút <code className="text-emerald-500">📡 Wi-Fi</code> là quét được ngay 100%.<br />
-                      • <strong>Dùng 4G/5G:</strong> Bấm <code className="text-[#F95716]">☁️ Cloudflare</code> và dán link hầm mới tạo.
-                    </p>
+
                   </div>
                 </div>
 
@@ -1131,7 +1169,7 @@ export default function ConsumerPortalPage({
                       </button>
 
                       <a
-                        href={customHost ? `${customHost.replace(/\/+$/, '')}/trace/${item.batchCode}` : `https://examine-ensures-supporting-tennessee.trycloudflare.com/trace/${item.batchCode}`}
+                        href={customHost ? `${customHost.replace(/\/+$/, '')}/trace/${item.batchCode}` : `/trace/${item.batchCode}`}
                         target="_blank"
                         rel="noreferrer"
                         className="px-4 py-2 rounded-xl bg-[#F95716] hover:bg-[#E0430B] text-white text-xs font-extrabold shadow-sm transition-all flex items-center gap-1.5"

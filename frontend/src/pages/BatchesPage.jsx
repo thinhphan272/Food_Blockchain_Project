@@ -17,7 +17,7 @@ import {
   Camera,
   ShoppingCart,
 } from '../components/MomentumIcons';
-import { posCheckoutWithRedlock, getBatchScanHistory } from '../services/api';
+import { posCheckoutWithRedlock, getBatchScanHistory, confirmRecallByProducer } from '../services/api';
 
 export default function BatchesPage({
   batches = [],
@@ -49,16 +49,62 @@ export default function BatchesPage({
   const CARD =
     'rounded-[28px] border border-orange-950/5 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:border-orange-500/10 dark:bg-[#1C140F]';
 
+  const CURRENT_WIFI_LAN_IP = '192.168.10.104';
+  const DEFAULT_PUBLIC_TUNNEL_URL = 'https://knowledgestorm-polyphonic-qualifications-howard.trycloudflare.com';
+
   const [lanIp, setLanIp] = useState(() => {
+    // 1. Nếu đang truy cập qua domain trycloudflare.com thì dùng ngay window.location.origin
+    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname.endsWith('.trycloudflare.com')) {
+      return window.location.origin;
+    }
+    // 2. Kiểm tra localStorage, lọc bỏ domain cũ đã chết
     try {
       const saved = localStorage.getItem('smartchain_custom_host');
-      if (saved) return saved;
-    } catch (e) {}
+      if (
+        saved &&
+        saved.trim() &&
+        !saved.includes('artists-consist-hudson-brother') &&
+        !saved.includes('examine-ensures-supporting-tennessee')
+      ) {
+        return saved.trim();
+      }
+    } catch (e) { }
     if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost') {
       return window.location.origin;
     }
-    return 'https://canberra-university-sells-pixel.trycloudflare.com';
+    return DEFAULT_PUBLIC_TUNNEL_URL;
   });
+
+  // Tự động kiểm tra file active_tunnel.json định kỳ để luôn nhận URL Cloudflare Tunnel mới nhất
+  useEffect(() => {
+    const syncActiveTunnel = () => {
+      fetch('/active_tunnel.json?t=' + Date.now())
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.tunnelUrl && data.active) {
+            setLanIp((prev) => {
+              if (
+                !prev ||
+                prev.includes('trycloudflare.com') ||
+                prev.includes('localhost') ||
+                prev.includes('127.0.0.1')
+              ) {
+                if (prev !== data.tunnelUrl) {
+                  try { localStorage.setItem('smartchain_custom_host', data.tunnelUrl); } catch (e) { }
+                  return data.tunnelUrl;
+                }
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => { });
+    };
+
+    syncActiveTunnel();
+    const interval = setInterval(syncActiveTunnel, 3000);
+    return () => clearInterval(interval);
+  }, []);
   const [activeQrModal, setActiveQrModal] = useState(null); // { code, title, status, isBatch }
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [scanLogs, setScanLogs] = useState([]);
@@ -99,6 +145,22 @@ export default function BatchesPage({
     return (batches || []).filter((b) => !String(b.status || '').toUpperCase().includes('RECALL'));
   }, [batches]);
 
+  const soldBatches = useMemo(() => {
+    return (batches || []).filter((b) => String(b.status || '').toUpperCase() === 'SOLD');
+  }, [batches]);
+
+  const pendingRecallBatches = useMemo(() => {
+    return (batches || []).filter((b) => String(b.status || '').toUpperCase() === 'RECALL_PENDING_PRODUCER');
+  }, [batches]);
+
+  const totalSoldRevenue = useMemo(() => {
+    return soldBatches.reduce((acc, b) => {
+      const price = Number(b.unit_price || b.unitPrice || 45000);
+      const count = Number(b.unit_count || b.unitCount || (b.item_qr_serials?.length) || 100);
+      return acc + (price * count);
+    }, 0);
+  }, [soldBatches]);
+
   // Bộ lọc danh sách lô hàng hiển thị
   const displayBatches = useMemo(() => {
     if (!Array.isArray(batches)) return [];
@@ -126,6 +188,7 @@ export default function BatchesPage({
       else if (batchFilterStatus === 'IN_TRANSIT') matchStatus = st === 'READY_FOR_PICKUP' || st === 'IN_TRANSIT';
       else if (batchFilterStatus === 'DELIVERED') matchStatus = st === 'DELIVERED' || st === 'QC_ACCEPTED';
       else if (batchFilterStatus === 'ON_SHELF') matchStatus = st === 'ON_SHELF';
+      else if (batchFilterStatus === 'SOLD') matchStatus = st === 'SOLD';
 
       return matchSearch && matchStatus;
     });
@@ -150,8 +213,8 @@ export default function BatchesPage({
     const calcWeight = selectedBatch.total_weight_kg && Number(selectedBatch.total_weight_kg) > 0
       ? Number(selectedBatch.total_weight_kg)
       : selectedBatch.weight_kg && Number(selectedBatch.weight_kg) > 0
-      ? Number(selectedBatch.weight_kg)
-      : 500;
+        ? Number(selectedBatch.weight_kg)
+        : 500;
     setEditWeight(String(calcWeight));
     const pCount = selectedBatch.package_count || Math.round(calcWeight / 10);
     setEditPackageCount(String(pCount));
@@ -192,10 +255,10 @@ export default function BatchesPage({
 
   const selectedBatchPlate = selectedBatch
     ? selectedBatch.transportJourney?.vehicle_plate ||
-      selectedBatch.transport_journey?.vehicle_plate ||
-      selectedBatch.transport_vehicle_plate ||
-      selectedBatch.vehicle_plate ||
-      ''
+    selectedBatch.transport_journey?.vehicle_plate ||
+    selectedBatch.transport_vehicle_plate ||
+    selectedBatch.vehicle_plate ||
+    ''
     : '';
 
   // Danh sách ma trận tem con của lô hàng đang chọn
@@ -324,6 +387,62 @@ export default function BatchesPage({
           </div>
         </div>
 
+        {/* Doanh thu hàng đã bán hết & Khối xác nhận thu hồi dành cho Producer */}
+        {isProducer && (
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-400">
+                Tổng Doanh Thu Hàng Đã Bán Hết (Siêu Thị POS)
+              </div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-300 mt-1">
+                {totalSoldRevenue.toLocaleString('vi-VN')} đ
+              </div>
+              <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                Đã hoàn tất thanh toán & hủy tem {soldBatches.length} lô hàng trên hệ thống quầy kệ siêu thị.
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="px-3.5 py-1.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black font-mono">
+                {soldBatches.length} Lô Đã Bán Hết
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Khối cảnh báo Nông trại xác nhận thu hồi lô hàng bị KCS từ chối */}
+        {isProducer && pendingRecallBatches.length > 0 && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-3">
+            <div className="flex items-center gap-2 font-black text-red-600 dark:text-red-400 text-xs">
+              <AlertTriangle size={16} />
+              <span>YÊU CẦU THU HỒI TỪ SIÊU THỊ ({pendingRecallBatches.length} LÔ HÀNG VI PHẠM)</span>
+            </div>
+            <div className="space-y-2">
+              {pendingRecallBatches.map((rb) => (
+                <div key={rb.batch_code} className="p-3 rounded-xl bg-white dark:bg-[#1C140F] border border-red-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                  <div>
+                    <span className="font-mono font-bold text-red-600">{rb.batch_code}</span> &bull; <strong>{rb.product_name}</strong>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">Lý do: Lô hàng không đạt chuẩn an toàn TTI tại cổng tiếp nhận KCS.</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await confirmRecallByProducer(rb.batch_code, { producerName: currentUser?.assignedEntity || currentUser?.fullName || 'Nông Trại' });
+                        window.location.reload();
+                      } catch (err) {
+                        alert(`Lỗi xác nhận thu hồi: ${err.message}`);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-all cursor-pointer whitespace-nowrap"
+                  >
+                    Xác Nhận Thu Hồi Lô Này Về Nông Trại
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab lọc trạng thái */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
           {[
@@ -332,19 +451,19 @@ export default function BatchesPage({
             { id: 'IN_TRANSIT', label: 'Đang vận chuyển' },
             { id: 'DELIVERED', label: 'Đã đến kho / KCS' },
             { id: 'ON_SHELF', label: 'Đang bày bán' },
+            { id: 'SOLD', label: `Đã bán hết (${soldBatches.length})` },
             { id: 'RECALLED', label: `🚨 Thu hồi khẩn cấp (${recalledBatches.length})` },
           ].map((tab) => (
             <button
               type="button"
               key={tab.id}
               onClick={() => setBatchFilterStatus(tab.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                batchFilterStatus === tab.id
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${batchFilterStatus === tab.id
                   ? tab.id === 'RECALLED'
                     ? 'bg-red-600 text-white shadow-sm'
                     : 'bg-[#F95716] text-white shadow-sm'
                   : 'bg-orange-950/[0.03] dark:bg-white/[0.03] text-neutral-500 hover:text-[#1A1A1A] dark:hover:text-white'
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -400,11 +519,10 @@ export default function BatchesPage({
                 <div
                   key={b.batch_code}
                   onClick={() => onSelectBatch && onSelectBatch(b)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                    isSelected
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${isSelected
                       ? 'border-[#F95716] bg-[#F95716]/[0.05] shadow-sm'
                       : 'border-orange-950/5 dark:border-orange-500/10 hover:border-[#F95716]/40 bg-orange-950/[0.01]'
-                  }`}
+                    }`}
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-1">
@@ -452,11 +570,10 @@ export default function BatchesPage({
             </div>
 
             <span
-              className={`px-3 py-1 rounded-full text-xs font-mono font-bold ${
-                selectedBatch
+              className={`px-3 py-1 rounded-full text-xs font-mono font-bold ${selectedBatch
                   ? 'bg-orange-500/10 text-[#F95716]'
                   : 'bg-neutral-100 dark:bg-white/5 text-neutral-400'
-              }`}
+                }`}
             >
               {selectedBatch ? selectedBatch.batch_code : 'Chưa chọn lô hàng'}
             </span>
@@ -540,11 +657,10 @@ export default function BatchesPage({
                       type="button"
                       key={cat.code}
                       onClick={() => setEditCategory(cat.code)}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                        editCategory === cat.code
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${editCategory === cat.code
                           ? 'border-[#F95716] bg-[#F95716]/[0.06] shadow-sm'
                           : 'border-orange-950/5 dark:border-orange-500/10 hover:bg-orange-950/[0.02]'
-                      }`}
+                        }`}
                     >
                       <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
                         {cat.name}
@@ -761,8 +877,8 @@ export default function BatchesPage({
                   {!selectedBatch
                     ? 'Chưa chọn lô hàng'
                     : selectedBatchPlate && !selectedBatchPlate.toUpperCase().includes('CHƯA')
-                    ? selectedBatchPlate
-                    : 'Chưa phân công xe'}
+                      ? selectedBatchPlate
+                      : 'Chưa phân công xe'}
                 </strong>
               </div>
 
@@ -775,8 +891,8 @@ export default function BatchesPage({
                 {!selectedBatch
                   ? 'CHƯA CHỌN LÔ HÀNG ĐỂ ĐỒNG BỘ OTA'
                   : selectedBatchPlate && !selectedBatchPlate.toUpperCase().includes('CHƯA')
-                  ? `ĐỒNG BỘ OTA XUỐNG ESP32 XE ${selectedBatchPlate}`
-                  : `ĐỒNG BỘ OTA LÔ ${selectedBatch.batch_code} XUỐNG ESP32`}
+                    ? `ĐỒNG BỘ OTA XUỐNG ESP32 XE ${selectedBatchPlate}`
+                    : `ĐỒNG BỘ OTA LÔ ${selectedBatch.batch_code} XUỐNG ESP32`}
               </button>
             </div>
           )}
@@ -800,11 +916,10 @@ export default function BatchesPage({
                   </div>
                 </div>
 
-                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${
-                  ['IN_TRANSIT', 'DELIVERED', 'QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
+                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${['IN_TRANSIT', 'DELIVERED', 'QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
                     ? 'bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-400'
                     : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
-                }`}>
+                  }`}>
                   <span className="text-sm font-black">2.</span>
                   <div>
                     <div className="text-xs font-bold">Vận chuyển xe tải lạnh IoT</div>
@@ -816,13 +931,12 @@ export default function BatchesPage({
                   </div>
                 </div>
 
-                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${
-                  ['QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
+                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${['QC_ACCEPTED', 'ON_SHELF'].includes(selectedBatch?.status)
                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
                     : selectedBatch?.status === 'QC_REJECTED'
-                    ? 'bg-red-500/10 border-red-500/20 text-red-600'
-                    : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
-                }`}>
+                      ? 'bg-red-500/10 border-red-500/20 text-red-600'
+                      : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
+                  }`}>
                   <span className="text-sm font-black">3.</span>
                   <div>
                     <div className="text-xs font-bold">Kiểm định chất lượng KCS & TTI</div>
@@ -830,17 +944,16 @@ export default function BatchesPage({
                       {selectedBatch?.status === 'QC_ACCEPTED'
                         ? 'Đã kiểm định TTI Arrhenius đạt chuẩn nhập kho'
                         : selectedBatch?.status === 'QC_REJECTED'
-                        ? 'Không đạt chuẩn - Trả hàng về nông trại'
-                        : 'Chờ xe cập bến cổng tiếp nhận kho'}
+                          ? 'Không đạt chuẩn - Trả hàng về nông trại'
+                          : 'Chờ xe cập bến cổng tiếp nhận kho'}
                     </div>
                   </div>
                 </div>
 
-                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${
-                  selectedBatch?.status === 'ON_SHELF'
+                <div className={`flex items-start gap-3 p-2.5 rounded-xl border ${selectedBatch?.status === 'ON_SHELF'
                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
                     : 'bg-neutral-100 dark:bg-white/5 border-transparent text-neutral-400'
-                }`}>
+                  }`}>
                   <span className="text-sm font-black">4.</span>
                   <div>
                     <div className="text-xs font-bold">Bày bán trên quầy kệ siêu thị</div>
@@ -957,11 +1070,10 @@ export default function BatchesPage({
                   <button
                     type="button"
                     onClick={() => setQrFilterTab('unsold')}
-                    className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
-                      qrFilterTab === 'unsold'
+                    className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${qrFilterTab === 'unsold'
                         ? 'bg-white dark:bg-[#1C140F] text-[#F95716] shadow-sm'
                         : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200'
-                    }`}
+                      }`}
                   >
                     Mã chưa bán ({unsoldItems.length})
                   </button>
@@ -969,11 +1081,10 @@ export default function BatchesPage({
                   <button
                     type="button"
                     onClick={() => setQrFilterTab('sold')}
-                    className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
-                      qrFilterTab === 'sold'
+                    className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${qrFilterTab === 'sold'
                         ? 'bg-white dark:bg-[#1C140F] text-rose-600 dark:text-rose-400 shadow-sm'
                         : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200'
-                    }`}
+                      }`}
                   >
                     Mã đã bán ({soldItems.length})
                   </button>
@@ -1164,20 +1275,19 @@ export default function BatchesPage({
                     const isWarn = Boolean(log.isWarning || String(log.statusAtScan).includes('VOID'));
                     const scanTime = log.timestamp
                       ? new Date(log.timestamp).toLocaleTimeString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })
                       : 'Vừa xong';
 
                     return (
                       <div
                         key={lIdx}
-                        className={`p-3 rounded-xl border text-xs transition-all ${
-                          isWarn
+                        className={`p-3 rounded-xl border text-xs transition-all ${isWarn
                             ? 'border-rose-500/20 bg-rose-500/[0.03]'
                             : 'border-emerald-500/20 bg-emerald-500/[0.02]'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100">
@@ -1190,11 +1300,10 @@ export default function BatchesPage({
                         <div className="text-xs text-neutral-600 dark:text-neutral-300 mt-1.5 flex items-center justify-between">
                           <span>{log.device || 'Trình duyệt điện thoại'}</span>
                           <span
-                            className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] ${
-                              isWarn
+                            className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] ${isWarn
                                 ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                                 : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                            }`}
+                              }`}
                           >
                             {isWarn ? 'CẢNH BÁO: ĐÃ BÁN' : 'HỢP LỆ'}
                           </span>
@@ -1258,11 +1367,10 @@ export default function BatchesPage({
                       type="button"
                       key={cat.code}
                       onClick={() => setNewBatchCategory(cat.code)}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                        newBatchCategory === cat.code
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${newBatchCategory === cat.code
                           ? 'border-[#F95716] bg-[#F95716]/[0.08] shadow-sm'
                           : 'border-orange-950/5 dark:border-orange-500/10 hover:bg-orange-950/[0.02]'
-                      }`}
+                        }`}
                     >
                       <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">{cat.name}</div>
                       <div className="text-[10px] font-mono text-[#F95716]">{cat.temp}</div>
@@ -1364,11 +1472,10 @@ export default function BatchesPage({
                   type="button"
                   key={cat.code}
                   onClick={() => setNewBatchCategory(cat.code)}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                    newBatchCategory === cat.code
+                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${newBatchCategory === cat.code
                       ? 'border-[#F95716] bg-[#F95716]/[0.06] shadow-sm'
                       : 'border-orange-950/5 dark:border-orange-500/10 hover:bg-orange-950/[0.02]'
-                  }`}
+                    }`}
                 >
                   <div className="text-xs font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
                     {cat.name}
@@ -1603,11 +1710,10 @@ export default function BatchesPage({
             <div className="flex items-center justify-between text-xs">
               <span className="text-neutral-500">Trạng thái tem:</span>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold ${
-                  String(activeQrModal.status).includes('SOLD') || String(activeQrModal.status).includes('VOID')
+                className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold ${String(activeQrModal.status).includes('SOLD') || String(activeQrModal.status).includes('VOID')
                     ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                     : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                }`}
+                  }`}
               >
                 {String(activeQrModal.status).includes('SOLD') || String(activeQrModal.status).includes('VOID')
                   ? 'Đã thanh toán (SEAL_VOID)'
@@ -1631,17 +1737,58 @@ export default function BatchesPage({
             {/* Cấu hình IP / Domain máy chủ */}
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between text-[11px] text-neutral-500">
-                <span>Địa chỉ IP LAN hoặc Tên miền Internet (Tunnel):</span>
+                <span>Chọn kênh kết nối cho điện thoại quét:</span>
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const wifiUrl = `http://${CURRENT_WIFI_LAN_IP}:5173`;
+                    setLanIp(wifiUrl);
+                    try { localStorage.setItem('smartchain_custom_host', wifiUrl); } catch (e) { }
+                  }}
+                  className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${lanIp.includes(CURRENT_WIFI_LAN_IP)
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shadow-sm'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
+                    }`}
+                  title="Dành cho điện thoại kết nối cùng mạng Wi-Fi với máy tính (Cực kỳ ổn định)"
+                >
+                  📡 Wi-Fi ({CURRENT_WIFI_LAN_IP})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetch('/active_tunnel.json?t=' + Date.now())
+                      .then((res) => (res.ok ? res.json() : null))
+                      .then((data) => {
+                        const targetUrl = (data && data.tunnelUrl) || DEFAULT_PUBLIC_TUNNEL_URL;
+                        setLanIp(targetUrl);
+                        try { localStorage.setItem('smartchain_custom_host', targetUrl); } catch (e) { }
+                      })
+                      .catch(() => {
+                        setLanIp(DEFAULT_PUBLIC_TUNNEL_URL);
+                      });
+                  }}
+                  className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold border transition-all cursor-pointer text-center ${lanIp.includes('trycloudflare.com')
+                      ? 'bg-orange-500/15 text-[#F95716] border-orange-500/30 shadow-sm'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
+                    }`}
+                  title="Dành cho điện thoại dùng mạng 4G/5G hoặc ở bất kỳ đâu"
+                >
+                  ☁️ Cloudflare (4G/5G)
+                </button>
+              </div>
+
               <input
                 type="text"
                 value={lanIp}
                 onChange={(e) => {
                   const val = e.target.value.trim();
                   setLanIp(val);
-                  try { localStorage.setItem('smartchain_custom_host', val); } catch (err) {}
+                  try { localStorage.setItem('smartchain_custom_host', val); } catch (err) { }
                 }}
-                placeholder="https://...trycloudflare.com hoặc 192.168.1.17"
+                placeholder="https://...trycloudflare.com hoặc 172.16.85.51"
                 className="w-full rounded-xl border border-orange-950/10 dark:border-orange-500/20 bg-orange-950/[0.02] dark:bg-white/[0.02] px-3 py-1.5 font-mono text-xs font-bold text-[#F95716] focus:outline-none focus:border-[#F95716]"
               />
               <div className="text-[10.5px] text-neutral-400 leading-tight">

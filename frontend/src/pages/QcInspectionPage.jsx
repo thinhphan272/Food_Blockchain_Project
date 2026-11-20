@@ -32,7 +32,7 @@ export default function QcInspectionPage({
   const completedBatches = useMemo(() => {
     return batches.filter((b) => {
       const st = String(b.status || '').toUpperCase();
-      return st === 'QC_ACCEPTED' || st === 'QC_REJECTED';
+      return st === 'QC_ACCEPTED' || st === 'QC_REJECTED' || st === 'ON_SHELF' || st === 'SOLD';
     });
   }, [batches]);
 
@@ -145,6 +145,12 @@ export default function QcInspectionPage({
               } else if (st === 'QC_ACCEPTED') {
                 stText = 'Đã duyệt đạt chuẩn';
                 stColor = 'bg-emerald-500/15 text-emerald-600 font-bold';
+              } else if (st === 'ON_SHELF') {
+                stText = 'Đã duyệt & Đang trên kệ';
+                stColor = 'bg-emerald-500/15 text-emerald-600 font-bold';
+              } else if (st === 'SOLD') {
+                stText = 'Đã duyệt & Đã bán lẻ';
+                stColor = 'bg-blue-500/15 text-blue-600 font-bold';
               } else if (st === 'QC_REJECTED') {
                 stText = 'Đã từ chối nhận';
                 stColor = 'bg-red-500/15 text-red-600 font-bold';
@@ -282,6 +288,35 @@ export default function QcInspectionPage({
             Hành động ký số sẽ kích hoạt hợp đồng thông minh Smart Contract để cập nhật trạng thái lô hàng lên Blockchain. Khi được duyệt đạt, lô hàng sẽ tự động chuyển tới Quản lý kệ để xếp lên quầy siêu thị.
           </p>
 
+          {/* CẢNH BÁO VI PHẠM CHUỖI LẠNH TỰ ĐỘNG KHÓA DUYỆT NHẬN */}
+          {(() => {
+            const effectiveTti = Number(
+              qcAuditResult?.freshness_score ??
+              qcAuditResult?.ttiScore ??
+              qcAuditResult?.aiTtiEvaluation?.ttiFreshnessScore ??
+              calculatedTti
+            );
+            const violationsCount = Number(qcAuditResult?.violations_count || 0);
+            const isMerkleFailed = qcAuditResult && qcAuditResult.merkle_valid === false;
+            const isSevereDamage = effectiveTti < 50 || violationsCount > 0 || isMerkleFailed || Boolean(selectedBatch?.is_breached);
+            const isAlreadyRecalled = String(selectedBatch?.status || '').toUpperCase().includes('RECALL');
+
+            if (isSevereDamage && !isAlreadyRecalled) {
+              return (
+                <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400 space-y-2">
+                  <div className="flex items-center gap-2 font-black">
+                    <AlertTriangle size={16} className="text-red-500 shrink-0" />
+                    <span>LÔ HÀNG KHÔNG ĐẠT CHẤT LƯỢNG TƯƠI</span>
+                  </div>
+                  <p className="leading-relaxed text-[11.5px]">
+                    Độ tươi TTI: <strong>{effectiveTti.toFixed(1)}%</strong> ({effectiveTti < 50 ? 'Dưới 50%' : 'Có vi phạm nhiệt độ/khí'}). Smart Contract tự động <strong>KHÓA quyền ký nhận kho</strong>. Kiểm định viên chỉ được phép phát lệnh thu hồi về nông trại!
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           <div>
             <label className="text-xs font-bold text-neutral-400 block mb-1">Ghi chú biên bản KCS</label>
             <textarea
@@ -293,24 +328,72 @@ export default function QcInspectionPage({
             />
           </div>
 
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              disabled={!selectedBatch || String(selectedBatch?.status || '').toUpperCase().includes('RECALL')}
-              onClick={() => handleApproveQc('REJECT')}
-              className="flex-1 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all disabled:opacity-40 cursor-pointer"
-            >
-              TỪ CHỐI NHẬN
-            </button>
-            <button
-              type="button"
-              disabled={!selectedBatch || String(selectedBatch?.status || '').toUpperCase().includes('RECALL')}
-              onClick={() => handleApproveQc('ACCEPT')}
-              className="flex-1 rounded-2xl bg-emerald-600 p-3 text-xs font-bold text-white shadow-sm hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer"
-            >
-              {String(selectedBatch?.status || '').toUpperCase().includes('RECALL') ? 'ĐÃ THU HỒI (KHÓA DUYỆT)' : 'KÝ DUYỆT NHẬN'}
-            </button>
-          </div>
+          {(() => {
+            const effectiveTti = Number(
+              qcAuditResult?.freshness_score ??
+              qcAuditResult?.ttiScore ??
+              qcAuditResult?.aiTtiEvaluation?.ttiFreshnessScore ??
+              calculatedTti
+            );
+            const violationsCount = Number(qcAuditResult?.violations_count || 0);
+            const isMerkleFailed = qcAuditResult && qcAuditResult.merkle_valid === false;
+            const isSevereDamage = effectiveTti < 50 || violationsCount > 0 || isMerkleFailed || Boolean(selectedBatch?.is_breached);
+            const isAlreadyRecalled = String(selectedBatch?.status || '').toUpperCase().includes('RECALL');
+
+            if (isAlreadyRecalled) {
+              return (
+                <div className="p-3 rounded-2xl bg-neutral-100 dark:bg-white/5 text-center text-xs font-bold text-neutral-500">
+                  Lô hàng này đã được phát lệnh thu hồi khẩn cấp.
+                </div>
+              );
+            }
+
+            if (isSevereDamage) {
+              return (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    disabled={!selectedBatch}
+                    onClick={async () => {
+                      await handleApproveQc('REJECT');
+                      setQcTab('completed');
+                    }}
+                    className="w-full rounded-2xl bg-red-600 hover:bg-red-700 p-3 text-xs font-black text-white shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <AlertTriangle size={15} />
+                    <span>PHÁT LỆNH THU HỒI VỀ NÔNG TRẠI</span>
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={!selectedBatch}
+                  onClick={async () => {
+                    await handleApproveQc('REJECT');
+                    setQcTab('completed');
+                  }}
+                  className="flex-1 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all disabled:opacity-40 cursor-pointer"
+                >
+                  TỪ CHỐI NHẬN
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedBatch}
+                  onClick={async () => {
+                    await handleApproveQc('ACCEPT');
+                    setQcTab('completed');
+                  }}
+                  className="flex-1 rounded-2xl bg-emerald-600 p-3 text-xs font-bold text-white shadow-sm hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer"
+                >
+                  KÝ DUYỆT NHẬN
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

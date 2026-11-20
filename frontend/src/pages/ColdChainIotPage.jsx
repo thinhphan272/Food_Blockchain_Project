@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   MapPin,
   Activity,
@@ -300,7 +300,60 @@ export default function ColdChainIotPage({
   const TRIP_DURATION_MS = 240000;
   const batchCodeKey = selectedBatch?.batch_code || 'NONE';
 
-  // Tự động đếm ngược 20 giây sau khi tài xế hoàn thành bàn giao lô hàng -> sau 20s tự xóa lô khỏi màn hình tài xế về "Chưa chọn lô hàng"
+  // Đóng thông báo hoàn tất bàn giao và tự động chuyển sang lô tiếp theo trong hàng đợi
+  const handleDismissPostDelivery = useCallback(() => {
+    const finishedBatchCode = selectedBatch?.batch_code;
+    if (finishedBatchCode) {
+      try {
+        sessionStorage.setItem(`dismissed_delivery_${finishedBatchCode}`, 'true');
+        localStorage.removeItem('smartchain_selected_batch_code');
+      } catch (e) {}
+    }
+    setPostDeliveryCountdown(null);
+    deliveredCountdownBatchRef.current = finishedBatchCode;
+
+    if (finishedBatchCode && isDoorOpen) {
+      openTruckDoor({
+        batchCode: finishedBatchCode,
+        action: 'CLOSE',
+        driverName: displayDriverName,
+        vehiclePlate: displayPlate,
+      }).catch(() => {});
+    }
+
+    // Tự động tìm lô tiếp theo trong danh sách lô hàng của tài xế (lô chờ chạy / đang vận chuyển)
+    const nextPending = batches.find(
+      (b) =>
+        b.batch_code !== finishedBatchCode &&
+        ['READY_FOR_PICKUP', 'ASSIGNED_PENDING', 'IN_TRANSIT'].includes(b.status)
+    );
+
+    if (nextPending && onSelectBatch) {
+      onSelectBatch(nextPending);
+      if (setSystemAlert) {
+        setSystemAlert({
+          type: 'success',
+          message: `Đã hoàn tất bàn giao lô ${finishedBatchCode}. Đã tự động chuyển sang lô tiếp theo: ${nextPending.batch_code} (${nextPending.product_name})!`,
+        });
+      }
+    } else {
+      if (onSelectBatch) {
+        onSelectBatch(null);
+      }
+      if (setSystemAlert && finishedBatchCode) {
+        setSystemAlert({
+          type: 'success',
+          message: `Lô hàng ${finishedBatchCode} đã hoàn tất bàn giao. Giao diện đã chuyển về trạng thái "Chưa chọn lô hàng" — bạn có thể chọn lô tiếp theo trong danh sách bên dưới!`,
+        });
+      }
+    }
+
+    if (refreshCoreData) {
+      refreshCoreData();
+    }
+  }, [selectedBatch?.batch_code, isDoorOpen, displayDriverName, displayPlate, batches, onSelectBatch, setSystemAlert, refreshCoreData]);
+
+  // Tự động đếm ngược 20 giây sau khi tài xế hoàn thành bàn giao lô hàng
   useEffect(() => {
     if (!isDriver) {
       if (postDeliveryCountdown !== null) setPostDeliveryCountdown(null);
@@ -308,6 +361,12 @@ export default function ColdChainIotPage({
     }
     if (!hasSelectedBatch || !isTripDelivered) {
       if (postDeliveryCountdown !== null) setPostDeliveryCountdown(null);
+      return;
+    }
+    // Nếu lô này đã từng được đóng / xác nhận bàn giao trong phiên làm việc, không bao giờ hiện lại countdown
+    if (sessionStorage.getItem(`dismissed_delivery_${selectedBatch.batch_code}`) === 'true') {
+      if (postDeliveryCountdown !== null) setPostDeliveryCountdown(null);
+      deliveredCountdownBatchRef.current = selectedBatch.batch_code;
       return;
     }
     if (deliveredCountdownBatchRef.current !== selectedBatch.batch_code) {
@@ -319,36 +378,14 @@ export default function ColdChainIotPage({
   useEffect(() => {
     if (postDeliveryCountdown === null) return;
     if (postDeliveryCountdown <= 0) {
-      const finishedBatchCode = selectedBatch?.batch_code;
-      setPostDeliveryCountdown(null);
-      deliveredCountdownBatchRef.current = null;
-      if (finishedBatchCode && isDoorOpen) {
-        openTruckDoor({
-          batchCode: finishedBatchCode,
-          action: 'CLOSE',
-          driverName: displayDriverName,
-          vehiclePlate: displayPlate,
-        }).catch(() => {});
-      }
-      if (onSelectBatch) {
-        onSelectBatch(null);
-      }
-      if (refreshCoreData) {
-        refreshCoreData();
-      }
-      if (setSystemAlert && finishedBatchCode) {
-        setSystemAlert({
-          type: 'success',
-          message: `Lô hàng ${finishedBatchCode} đã hoàn tất bàn giao. Giao diện đã chuyển về trạng thái "Chưa chọn lô hàng" — vui lòng chọn lô chờ chạy tiếp theo trong danh sách quản lý lô!`,
-        });
-      }
+      handleDismissPostDelivery();
       return;
     }
     const timer = setTimeout(() => {
       setPostDeliveryCountdown((prev) => (prev !== null ? prev - 1 : null));
     }, 1000);
     return () => clearTimeout(timer);
-  }, [postDeliveryCountdown, selectedBatch?.batch_code, isDoorOpen]);
+  }, [postDeliveryCountdown, handleDismissPostDelivery]);
 
   let tripProgress = 0;
   if (isTripRunning && hasSelectedBatch) {
@@ -551,6 +588,9 @@ export default function ColdChainIotPage({
     setActionLoading(true);
     try {
       localStorage.removeItem(`trip_start_${batchCodeKey}`);
+      try {
+        sessionStorage.removeItem(`dismissed_delivery_${selectedBatch.batch_code}`);
+      } catch (e) {}
       deliveredCountdownBatchRef.current = selectedBatch.batch_code;
       setPostDeliveryCountdown(20);
       if (handleCompleteDriverTrip) {
@@ -574,6 +614,9 @@ export default function ColdChainIotPage({
     setActionLoading(true);
     try {
       localStorage.removeItem(`trip_start_${batchCodeKey}`);
+      try {
+        sessionStorage.removeItem(`dismissed_delivery_${selectedBatch.batch_code}`);
+      } catch (e) {}
       deliveredCountdownBatchRef.current = null;
       setPostDeliveryCountdown(null);
       await resetDriverTrip(selectedBatch.batch_code);
@@ -872,7 +915,7 @@ export default function ColdChainIotPage({
           </div>
           <button
             type="button"
-            onClick={() => setPostDeliveryCountdown(0)}
+            onClick={handleDismissPostDelivery}
             className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md cursor-pointer"
           >
             Đóng ngay & Chọn lô tiếp theo ({postDeliveryCountdown}s)

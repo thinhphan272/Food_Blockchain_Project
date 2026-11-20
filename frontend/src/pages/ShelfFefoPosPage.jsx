@@ -23,9 +23,41 @@ export default function ShelfFefoPosPage({
   const isShelfStaff = currentUser?.role === 'SHELF_OPERATOR';
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Quản lý kệ: Tab phân tách rõ ràng giữa "Chờ xếp kệ" và "Đang trên kệ"
-  const [shelfTab, setShelfTab] = useState('waiting'); // 'waiting' (QC_ACCEPTED) | 'active' (ON_SHELF)
+  // Quản lý kệ: Tab phân tách rõ ràng giữa "Chờ xếp kệ", "Đang trên kệ" và "Đã bán hết"
+  const [shelfTab, setShelfTab] = useState('waiting'); // 'waiting' (QC_ACCEPTED) | 'active' (ON_SHELF) | 'sold' (SOLD)
   const scannerRef = useRef(null);
+
+  // Lưu lịch sử hóa đơn thanh toán POS
+  const [recentReceipts, setRecentReceipts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smartchain_pos_receipts');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Tự động ghi nhận biên lai khi có kết quả thanh toán thành công
+  useEffect(() => {
+    if (posCheckoutResult && posCheckoutResult.status === 200) {
+      const itemData = matchedItem || {};
+      const newReceipt = {
+        id: posCheckoutResult.data?.receiptId || `REC-${Date.now().toString().slice(-6)}`,
+        serialCode: cleanSerial || itemData.serialCode || 'Mã tem',
+        productName: itemData.productName || 'Sản phẩm siêu thị',
+        batchCode: itemData.batchCode || selectedBatch?.batch_code || '---',
+        price: itemData.price || '45,000 đ',
+        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      };
+      setRecentReceipts((prev) => {
+        const updated = [newReceipt, ...prev.filter((r) => r.serialCode !== newReceipt.serialCode)].slice(0, 15);
+        try {
+          localStorage.setItem('smartchain_pos_receipts', JSON.stringify(updated));
+        } catch (e) { }
+        return updated;
+      });
+    }
+  }, [posCheckoutResult]);
 
   // Phân loại danh sách lô hàng cho nhân viên Quản lý kệ
   const waitingBatches = useMemo(() => {
@@ -42,7 +74,19 @@ export default function ShelfFefoPosPage({
     });
   }, [batches]);
 
-  const shelfDisplayedBatches = shelfTab === 'waiting' ? waitingBatches : activeBatches;
+  const soldBatches = useMemo(() => {
+    return batches.filter((b) => {
+      const st = String(b.status || '').toUpperCase();
+      return st === 'SOLD';
+    });
+  }, [batches]);
+
+  const shelfDisplayedBatches =
+    shelfTab === 'waiting'
+      ? waitingBatches
+      : shelfTab === 'active'
+      ? activeBatches
+      : soldBatches;
 
   // Tự động chọn lô đầu tiên của tab khi chuyển tab
   useEffect(() => {
@@ -246,6 +290,17 @@ export default function ShelfFefoPosPage({
                 >
                   Lô hàng đang bày bán trên kệ ({activeBatches.length})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShelfTab('sold')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    shelfTab === 'sold'
+                      ? 'bg-[#F95716] text-white shadow-sm'
+                      : 'bg-orange-950/[0.04] dark:bg-white/[0.05] text-neutral-500 hover:text-[#1A1A1A] dark:hover:text-white'
+                  }`}
+                >
+                  Lô hàng đã bán hết ({soldBatches.length})
+                </button>
               </div>
 
               <div className="text-xs">
@@ -263,6 +318,12 @@ export default function ShelfFefoPosPage({
                   const isSelected = selectedBatch?.batch_code === b.batch_code;
                   const st = String(b.status || 'CREATED').toUpperCase();
                   const isWaiting = st === 'QC_ACCEPTED';
+                  const isSold = st === 'SOLD';
+                  const items = b.item_qr_serials || b.itemQrSerials || [];
+                  const unsold = items.filter(
+                    (it) => !String(it.status || '').toUpperCase().includes('SOLD') && !String(it.status || '').toUpperCase().includes('VOID')
+                  ).length;
+                  const total = items.length || b.unit_count || 1;
 
                   return (
                     <button
@@ -281,12 +342,14 @@ export default function ShelfFefoPosPage({
                         </span>
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                            isWaiting
+                            isSold
+                              ? 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 font-black'
+                              : isWaiting
                               ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                               : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                           }`}
                         >
-                          {isWaiting ? 'Chờ xếp vào kệ' : 'Đang trên kệ'}
+                          {isSold ? 'Đã bán hết' : isWaiting ? 'Chờ xếp vào kệ' : 'Đang trên kệ'}
                         </span>
                       </div>
 
@@ -299,10 +362,10 @@ export default function ShelfFefoPosPage({
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-orange-950/5 dark:border-orange-500/10 flex items-center justify-between text-[10.5px] text-neutral-400">
-                        <span>Đã duyệt KCS TTI đạt</span>
-                        <span className="font-bold text-[#1A1A1A] dark:text-neutral-300">
-                          {b.total_weight_kg || b.weight_kg || 500} kg
+                      <div className="pt-2 border-t border-orange-950/5 dark:border-orange-500/10 flex items-center justify-between text-[10.5px]">
+                        <span className="text-neutral-400">Số lượng còn:</span>
+                        <span className="font-bold font-mono text-[#F95716]">
+                          {isSold ? '0' : unsold} / {total} sản phẩm
                         </span>
                       </div>
                     </button>
@@ -594,6 +657,63 @@ export default function ShelfFefoPosPage({
                   Tem QR niêm phong này đã bị hủy hiệu lực trong lần thanh toán trước. Hệ thống đã từ chối giao dịch để chống gian lận tái sử dụng bao bì.
                 </div>
               )}
+            </div>
+          )}
+
+          {/* NHẬT KÝ THANH TOÁN GIAO DỊCH THU NGÂN GẦN ĐÂY */}
+          {recentReceipts.length > 0 && (
+            <div className="pt-4 border-t border-orange-950/5 dark:border-orange-500/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase text-neutral-500 dark:text-neutral-400">
+                  Lịch sử thanh toán thu ngân gần đây ({recentReceipts.length})
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecentReceipts([]);
+                    try { localStorage.removeItem('smartchain_pos_receipts'); } catch (e) { }
+                  }}
+                  className="text-[10.5px] font-bold text-neutral-400 hover:text-red-500 transition-colors"
+                >
+                  Xóa lịch sử
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {recentReceipts.map((rec) => (
+                  <div
+                    key={rec.id + rec.serialCode}
+                    className="p-3 rounded-2xl bg-orange-950/[0.02] dark:bg-white/[0.02] border border-orange-950/5 dark:border-orange-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-[#F95716]">{rec.serialCode}</span>
+                        <span className="text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 font-bold">
+                          Đã thanh toán
+                        </span>
+                      </div>
+                      <div className="text-[11.5px] font-bold text-[#1A1A1A] dark:text-[#F5F5F5]">
+                        {rec.productName} &bull; <span className="font-mono text-neutral-400">{rec.batchCode}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className="font-extrabold text-[#F95716]">{rec.price}</div>
+                        <div className="text-[10px] text-neutral-400">{rec.time}</div>
+                      </div>
+                      <a
+                        href={`/trace/${encodeURIComponent(rec.serialCode)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-xl border border-orange-950/10 dark:border-orange-500/20 bg-white dark:bg-[#1C140F] hover:bg-[#F95716]/10 text-neutral-600 dark:text-neutral-300 hover:text-[#F95716] text-[11px] font-bold transition-all inline-flex items-center gap-1"
+                      >
+                        Xem chi tiết &rarr;
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
