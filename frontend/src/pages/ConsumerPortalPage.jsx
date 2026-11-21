@@ -31,8 +31,8 @@ import {
 import { resolveFoodBatchMedia, CONSUMER_LOGIN_BG } from '../utils/foodMediaResolver';
 import { traceByCode } from '../services/api';
 
-const CURRENT_WIFI_LAN_IP = '192.168.10.104';
-const DEFAULT_PUBLIC_TUNNEL_URL = 'https://knowledgestorm-polyphonic-qualifications-howard.trycloudflare.com';
+const CURRENT_WIFI_LAN_IP = '192.168.1.130';
+const DEFAULT_PUBLIC_TUNNEL_URL = 'https://davis-conversation-circuits-shipments.trycloudflare.com';
 
 const CATEGORY_TEMP_RANGES = {
   VEG_FRUIT: '8 - 12°C',

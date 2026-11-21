@@ -49,8 +49,8 @@ export default function BatchesPage({
   const CARD =
     'rounded-[28px] border border-orange-950/5 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:border-orange-500/10 dark:bg-[#1C140F]';
 
-  const CURRENT_WIFI_LAN_IP = '192.168.10.104';
-  const DEFAULT_PUBLIC_TUNNEL_URL = 'https://knowledgestorm-polyphonic-qualifications-howard.trycloudflare.com';
+  const CURRENT_WIFI_LAN_IP = '192.168.1.130';
+  const DEFAULT_PUBLIC_TUNNEL_URL = 'https://davis-conversation-circuits-shipments.trycloudflare.com';
 
   const [lanIp, setLanIp] = useState(() => {
     // 1. Nếu đang truy cập qua domain trycloudflare.com thì dùng ngay window.location.origin
