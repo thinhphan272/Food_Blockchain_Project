@@ -509,11 +509,11 @@ export default function OverviewPage({
               onSelectBatch(null);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#F95716] to-[#E0430B] hover:brightness-110 text-white text-xs sm:text-sm font-black shadow-[0_10px_30px_rgba(249,87,22,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/40"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#F95716] to-[#E0430B] hover:brightness-110 text-white text-xs sm:text-sm font-black shadow-[0_10px_30px_rgba(249,87,22,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-white/40 group"
             title="Bấm để quay về danh sách chọn lô hàng khác"
           >
-            <Repeat size={16} />
-            <span>⇄ Đổi Lô Hàng</span>
+            <Repeat size={16} className="group-hover:rotate-180 transition-transform duration-300" />
+            <span>Đổi Lô Hàng</span>
           </button>
         </div>
       )}
@@ -536,10 +536,10 @@ export default function OverviewPage({
             <button
               type="button"
               onClick={() => onSelectBatch(null)}
-              className="px-4 py-2.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 hover:border-[#F95716] text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-[#F95716] transition-all bg-white dark:bg-[#1C140F] shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 hover:border-[#F95716] text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:text-[#F95716] transition-all bg-white dark:bg-[#1C140F] shadow-sm cursor-pointer inline-flex items-center gap-2 group"
             >
-              <Repeat size={13} />
-              ⇄ Đổi Lô Hàng
+              <Repeat size={14} className="group-hover:rotate-180 transition-transform duration-300 text-[#F95716]" />
+              <span>Đổi Lô Hàng</span>
             </button>
           )}
 
