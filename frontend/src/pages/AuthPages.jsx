@@ -62,8 +62,8 @@ export default function AuthPages({
   // Xác định cổng hiện tại
   const currentPortal = isPathAdmin ? 'admin' : isPathEnterprise ? 'enterprise' : isPathConsumer ? 'consumer' : 'gateway';
 
-  // Client ID chính thức đã đăng ký trên Google Cloud Console
-  const DEFAULT_GOOGLE_CLIENT_ID = '1071098222333-bhsipdrp2bv1421u51jk2tatt252221k.apps.googleusercontent.com';
+  // Client ID đọc an toàn từ biến môi trường .env (không hardcode trong mã nguồn)
+  const DEFAULT_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
   // State cấu hình & điều phối Google OAuth 2.0 Thật (Google Identity Services)
   const [showGoogleConfigModal, setShowGoogleConfigModal] = useState(false);
